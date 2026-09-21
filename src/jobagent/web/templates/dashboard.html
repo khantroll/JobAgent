@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="muted">Shared job catalog with per-candidate matches. Auto-apply is disabled in alpha.2.</p>
+    <p class="muted">The UI binds to 127.0.0.1 by default and must not be exposed on a public interface.</p>
+    {% if selected %}
+    <p>Match counts for <strong>{{ selected.name }}</strong> — {{ selected.location }}</p>
+    {% else %}
+    <p>Showing catalog totals. Select a person to see their match status.</p>
+    {% endif %}
+  </div>
+  <form method="post" action="{{ base }}/run">
+    {% if selected %}<input type="hidden" name="candidate_id" value="{{ selected.id }}">{% endif %}
+    <button class="primary" type="submit">Run dry-run cycle{% if selected %} for {{ selected.name }}{% endif %}</button>
+  </form>
+  {% if run_error %}<p class="error">{{ run_error }}</p>{% endif %}
+</section>
+<form class="panel filters" method="get" action="{{ base }}/">
+  <label>View matches for
+    <select name="candidate_id" onchange="this.form.submit()">
+      <option value="">Catalog (all jobs)</option>
+      {% for p in people %}
+      <option value="{{ p.id }}" {% if selected and selected.id==p.id %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+<div class="cards">
+  <div class="card"><b>{{ stats.catalog_jobs }}</b><span>Catalog jobs</span></div>
+  {% if selected %}
+  <div class="card"><b>{{ stats.total }}</b><span>Matches for {{ selected.name }}</span></div>
+  <div class="card"><b>{{ stats.unscored }}</b><span>Unscored</span></div>
+  {% for status, count in stats['by_status'].items() %}<div class="card"><b>{{ count }}</b><span>{{ status }}</span></div>{% endfor %}
+  {% else %}
+  <div class="card"><b>{{ stats.candidates }}</b><span>Candidates</span></div>
+  <div class="card"><b>{{ stats.match_rows }}</b><span>Match rows</span></div>
+  {% endif %}
+</div>
+<section class="panel">
+  <h2>Last database runs</h2>
+  <table><tr><th>When</th><th>Found</th><th>Applied</th><th>Review</th><th>Dry run</th><th>Errors</th></tr>
+  {% for r in history %}<tr><td>{{ r.run_at }}</td><td>{{ r.new }}</td><td>{{ r.applied }}</td><td>{{ r.flagged }}</td><td>{% if r.dry_run %}yes{% else %}no{% endif %}</td><td>{{ r.errors }}</td></tr>{% else %}<tr><td colspan="6">No run history yet.</td></tr>{% endfor %}
+  </table>
+</section>
+{% if import_report %}
+<section class="panel">
+  <h2>Last legacy import</h2>
+  <p class="muted">{{ import_report.source_path }} — {{ import_report.finished_at|format_date }}</p>
+  <p>{{ import_report.report.ambiguous_count }} ambiguous job association(s). Matches invented: {{ import_report.report.matches_invented }}.</p>
+</section>
+{% endif %}
+{% endblock %}

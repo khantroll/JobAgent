@@ -1,0 +1,97 @@
+# Global application / provider configuration for JobAgent 2.0.
+# Candidate identity and search preferences live in the database, not here.
+# Copy to config/settings.yaml. Secrets belong in .env — never in this file.
+# The Simple UI is for local use (127.0.0.1). Do not expose it on a public network.
+
+search:
+  exclude_companies: []
+  exclude_keywords:
+    - blockchain
+    - crypto
+    - entry level
+    - junior
+  filter_by_location: true
+  location_accept_remote: true
+  rss_feeds:
+    - "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss"
+
+sources:
+  adzuna:
+    enabled: true
+    filter_by_titles: true
+    country: us
+    where: ""
+    distance_miles: 50
+    max_pages: 2
+    max_queries: 10
+  remotive:
+    enabled: true
+    categories: [devops, software-dev]
+  usajobs:
+    enabled: true
+    location: ""
+    radius: 75
+    filter_by_location: true
+    max_pages: 2
+    max_queries: 10
+  jsearch:
+    enabled: true
+    filter_by_titles: true
+    location: ""
+    country: us
+    num_pages: 2
+    date_posted: month
+    remote_only: false
+    max_queries: 10
+  themuse:
+    enabled: true
+    max_pages: 5
+    location: ""
+    categories: []
+    levels: ["Senior Level", "Mid Level"]
+    filter_by_titles: false
+  higheredjobs:
+    enabled: true
+    filter_by_titles: true
+    category_ids: [144, 161, 162, 173]
+  greenhouse:
+    enabled: true
+    filter_by_titles: true
+    companies:
+      - sumologic
+      - datadog
+      - okta
+      - pagerduty
+  lever:
+    enabled: true
+    instance: global
+    filter_by_titles: true
+    companies:
+      - wachter
+      - entrata
+      - kinsta
+  workday:
+    enabled: true
+    filter_by_titles: true
+    use_playwright_fallback: false
+    max_pages: 3
+    companies: []
+
+routing:
+  provider: osrm
+  osrm_base_url: "https://router.project-osrm.org"
+  nominatim_base_url: "https://nominatim.openstreetmap.org"
+  user_agent: "jobagent/2.0.0-alpha.2 (personal job search)"
+  country_hint: "USA"
+
+llm:
+  # anthropic | mistral | mock
+  # If the live provider has no key, ranking uses a deterministic heuristic fallback.
+  provider: mistral
+  model: mistral-small-latest
+
+scheduler:
+  run_every_hours: 4
+  max_rank_per_run: 50
+  # Alpha.2 is dry-run only. Auto-apply is disabled in code regardless of this flag.
+  dry_run: true

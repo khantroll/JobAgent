@@ -1,0 +1,8 @@
+<div class="employer-row">
+  <label>Employer<input name="employer_name" value="{{ e.name|default('') }}"></label>
+  <label>Type<select name="employer_source"><option value="workday" {% if e.source_type|default('workday')=='workday' %}selected{% endif %}>Workday/careers URL</option><option value="greenhouse" {% if e.source_type|default('')=='greenhouse' %}selected{% endif %}>Greenhouse</option><option value="lever" {% if e.source_type|default('')=='lever' %}selected{% endif %}>Lever</option></select></label>
+  <label>Careers URL<input name="careers_url" value="{{ e.careers_url|default('') }}"></label>
+  <label>Workday URL<input name="workday_url" value="{{ e.workday_url|default('') }}"></label>
+  <label>Greenhouse slug<input name="greenhouse_slug" value="{{ e.greenhouse_slug|default('') }}"></label>
+  <label>Lever slug<input name="lever_slug" value="{{ e.lever_slug|default('') }}"></label>
+</div>

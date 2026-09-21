@@ -1,0 +1,169 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <h1>Job matches — {{ candidate.name }}</h1>
+  <div>
+    <a class="button" href="{{ export_url }}">Export CSV</a>
+    <a class="button" href="{{ base }}/candidates/{{ candidate.id }}">Edit profile</a>
+    <a class="button" href="{{ base }}/candidates">People</a>
+  </div>
+</section>
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<section class="panel">
+  <p><strong>This list belongs only to {{ candidate.name }}</strong> (not whoever is active for job search).</p>
+  {% if is_active %}
+  <p class="muted">{{ candidate.name }} is active — new crawls will link here. Toggling active does not move existing rows.</p>
+  {% elif active_name %}
+  <p class="muted">Active for job search: <strong>{{ active_name }}</strong>. New jobs go to them until you switch.</p>
+  {% endif %}
+  <p class="muted"><strong>{{ total_all }}</strong> job(s) linked to {{ candidate.name }} total.
+    {% if duplicate_count %}<strong>{{ duplicate_count }}</strong> look like duplicates (same title + company, different URL/source).{% endif %}
+    {% if date_filter_on %}<strong>{{ total }}</strong> in the date range below.{% endif %}
+  </p>
+  {% if total_all > 0 and total == 0 and date_filter_on %}
+  <p><a class="button primary" href="{{ show_all_url }}">Show all dates ({{ total_all }} jobs)</a></p>
+  {% elif total_all == 0 %}
+  <p class="muted">Use the button below to attach jobs already in the database, or run a crawl while this person is active.</p>
+  {% endif %}
+</section>
+<p class="muted">Statuses: <strong>new</strong> → <strong>reviewed</strong> → <strong>applied</strong>, or <strong>rejected</strong> / <strong>ignored</strong>. Mark a job <strong>reviewed</strong>, then use <strong>Apply</strong> — same pipeline as scheduled auto-apply (Adzuna/JSearch listings included when their URL is LinkedIn or Greenhouse). Leave dates empty to see everything.</p>
+{% if dry_run %}
+<p class="panel muted"><strong>Dry run is on</strong> (<code>scheduler.dry_run</code> in profile.yaml) — Apply will generate docs and mark the job applied, but will not submit to the job board until dry run is disabled.</p>
+{% endif %}
+{% if reviewed_count %}
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/apply-reviewed?{{ filter_q }}" onsubmit="return confirm('Apply to {{ reviewed_count }} reviewed job(s) for {{ candidate.name }}?');">
+  <p><strong>{{ reviewed_count }}</strong> reviewed job(s) ready to apply.</p>
+  <button type="submit" class="primary">Apply to all reviewed</button>
+</form>
+{% endif %}
+<form class="panel filters" method="get" action="{{ base }}/candidates/{{ candidate.id }}/matches">
+  <label>Status
+    <select name="status">
+      <option value="">Any</option>
+      {% for s in statuses %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="date_to" value="{{ date_to }}"></label>
+  <label>Date applies to
+    <select name="date_field">
+      <option value="matched_at" {% if date_field=='matched_at' %}selected{% endif %}>Linked to person</option>
+      <option value="status_updated_at" {% if date_field=='status_updated_at' %}selected{% endif %}>Status updated</option>
+      <option value="found_at" {% if date_field=='found_at' %}selected{% endif %}>Job discovered</option>
+      <option value="applied_at" {% if date_field=='applied_at' %}selected{% endif %}>Applied</option>
+    </select>
+  </label>
+  <label>Sort by
+    <select name="sort_by">
+      <option value="status_updated_at" {% if sort_by=='status_updated_at' %}selected{% endif %}>Status updated</option>
+      <option value="matched_at" {% if sort_by=='matched_at' %}selected{% endif %}>Linked date</option>
+      <option value="found_at" {% if sort_by=='found_at' %}selected{% endif %}>Job discovered</option>
+      <option value="applied_at" {% if sort_by=='applied_at' %}selected{% endif %}>Applied date</option>
+      <option value="status" {% if sort_by=='status' %}selected{% endif %}>Status</option>
+      <option value="score" {% if sort_by=='score' %}selected{% endif %}>Match score</option>
+      <option value="title" {% if sort_by=='title' %}selected{% endif %}>Title</option>
+      <option value="company" {% if sort_by=='company' %}selected{% endif %}>Company</option>
+    </select>
+  </label>
+  <label>Order
+    <select name="sort_dir">
+      <option value="desc" {% if sort_dir=='desc' %}selected{% endif %}>Newest / highest first</option>
+      <option value="asc" {% if sort_dir=='asc' %}selected{% endif %}>Oldest / lowest first</option>
+    </select>
+  </label>
+  <label><input type="checkbox" name="hide_duplicates" value="1" {% if hide_duplicates %}checked{% endif %}> Hide duplicates</label>
+  <button type="submit">Filter &amp; sort</button>
+  <a class="button" href="{{ show_all_url }}">Clear dates</a>
+</form>
+{% if duplicate_count %}
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/ignore-duplicates?{{ filter_q }}">
+  <p class="muted">Mark extra listings (same title + company) as <strong>ignored</strong>, keeping the best-scored row in each group.</p>
+  <button type="submit">Ignore {{ duplicate_count }} duplicate(s)</button>
+</form>
+{% endif %}
+{% if others_with_jobs %}
+<section class="panel">
+  <h2>Fix wrong person on a list</h2>
+  <p class="muted">If crawl history was linked to someone else by mistake, move it here in one step (their list becomes empty).</p>
+  {% for o in others_with_jobs %}
+  <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/claim-from/{{ o.id }}?{{ filter_q }}" style="margin:.5rem 0">
+    <button type="submit" class="primary">Move {{ o.match_count }} job(s) from {{ o.name }} → {{ candidate.name }}</button>
+  </form>
+  {% endfor %}
+</section>
+{% endif %}
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/link-all?{{ filter_q }}">
+  <p class="muted">Adds any database listings missing from <strong>{{ candidate.name }}'s</strong> list (does not remove them from other people).</p>
+  <button type="submit">Attach missing jobs to {{ candidate.name }}</button>
+</form>
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/clear?{{ filter_q }}" onsubmit="return confirm('Remove ALL job links from {{ candidate.name }}? This cannot be undone.');">
+  <p class="muted">Use on a <strong>new</strong> profile that should not have crawl history yet.</p>
+  <button type="submit">Clear {{ candidate.name }}'s job list</button>
+</form>
+<section class="panel">
+  <p><strong>{{ total }}</strong> row(s) shown</p>
+  <table>
+    <tr>
+      <th>Status</th><th>Title</th><th>Company</th><th>Score</th><th>Dup</th><th>Dates</th><th>Update</th><th>Apply</th>
+    </tr>
+    {% for m in matches %}
+    <tr id="job-{{ m.job_id }}"{% if m.is_duplicate %} class="dup-row"{% endif %}>
+      <td>
+        <strong>{{ m.status }}</strong>
+        {% if m.status_reason %}<div class="muted">{{ m.status_reason }}</div>{% endif %}
+      </td>
+      <td>
+        <a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }}</a>
+        <div class="muted">{{ m.source }}</div>
+        {% if m.score_reason %}<div class="muted">{{ m.score_reason }}</div>{% endif %}
+        {% if m.commute_note %}<div class="muted">{{ m.work_type }} — {{ m.commute_note }}</div>{% endif %}
+      </td>
+      <td>{{ m.company }}<div class="muted">{{ m.location }}</div></td>
+      <td>{{ m.score or '' }}</td>
+      <td class="muted">
+        {% if m.is_duplicate %}
+        <span class="dup-badge">dup</span>
+        <div><a href="{{ base }}/candidates/{{ candidate.id }}/matches#job-{{ m.duplicate_of_job_id }}">same as above</a></div>
+        {% elif m.duplicate_group_size and m.duplicate_group_size > 1 %}
+        <span class="dup-badge canon">{{ m.duplicate_group_size }}×</span>
+        {% endif %}
+      </td>
+      <td class="muted">
+        Found {{ m.found_at|format_date }}<br>
+        Linked {{ m.matched_at|format_date }}<br>
+        Updated {{ m.status_updated_at|format_date }}
+        {% if m.applied_at %}<br>Applied {{ m.applied_at|format_date }}{% endif %}
+      </td>
+      <td>
+        <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ m.job_id }}/status" class="match-status-form">
+          <input type="hidden" name="filter_status" value="{{ status }}">
+          <input type="hidden" name="date_from" value="{{ date_from }}">
+          <input type="hidden" name="date_to" value="{{ date_to }}">
+          <input type="hidden" name="date_field" value="{{ date_field }}">
+          <input type="hidden" name="sort_by" value="{{ sort_by }}">
+          <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+          {% if hide_duplicates %}<input type="hidden" name="hide_duplicates" value="1">{% endif %}
+          <select name="status">
+            {% for s in statuses %}<option value="{{ s }}" {% if m.status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select>
+          <input name="status_reason" placeholder="Why (optional)" value="{{ m.status_reason or '' }}">
+          <button>Save</button>
+        </form>
+      </td>
+      <td>
+        {% if m.status == 'reviewed' %}
+        <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ m.job_id }}/apply?{{ filter_q }}" onsubmit="return confirm('Submit application for this job?');">
+          <button type="submit" class="primary">Apply</button>
+        </form>
+        {% elif m.status == 'applied' %}
+        <span class="muted">Done</span>
+        {% else %}
+        <span class="muted">Review first</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8">Nothing to show. {% if total_all > 0 %}<a href="{{ show_all_url }}">Clear date filter</a>{% else %}Use “Attach all jobs” or crawl while {{ candidate.name }} is active.{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

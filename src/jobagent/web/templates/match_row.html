@@ -1,0 +1,53 @@
+<tr id="job-{{ m.job_id }}"{% if m.is_duplicate %} class="dup-row"{% endif %}>
+  <td>
+    <strong>{{ m.status }}</strong>
+    {% if m.application_state and m.application_state != 'none' %}
+    <div class="muted">application: {{ m.application_state }}</div>
+    {% endif %}
+    {% if m.status_reason %}<div class="muted">{{ m.status_reason }}</div>{% endif %}
+  </td>
+  <td>
+    <a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }}</a>
+    <div class="muted">{{ m.source }}</div>
+  </td>
+  <td>{{ m.company }}<div class="muted">{{ m.location }}</div></td>
+  <td class="muted">{{ m.salary_raw or '' }}</td>
+  <td>{{ m.score if m.score is not none else '' }}
+    {% if m.rank_provider %}<div class="muted">{{ m.rank_provider }}{% if m.rank_model %} / {{ m.rank_model }}{% endif %}</div>{% endif %}
+  </td>
+  <td class="muted">{{ m.score_reason or '' }}</td>
+  <td class="muted">
+    {% if m.work_type %}{{ m.work_type }}{% endif %}
+    {% if m.commute_minutes is not none %} · {{ m.commute_minutes }} min{% endif %}
+    {% if m.commute_result %}<div>{{ m.commute_result }}{% if m.auto_apply_eligible %} · eligible{% endif %}</div>{% endif %}
+    {% if m.commute_note %}<div>{{ m.commute_note }}</div>{% endif %}
+  </td>
+  <td class="muted">
+    {% if m.is_duplicate %}
+    <span class="dup-badge">dup</span>
+    {% elif m.duplicate_group_size and m.duplicate_group_size > 1 %}
+    <span class="dup-badge canon">{{ m.duplicate_group_size }}×</span>
+    {% endif %}
+  </td>
+  <td class="muted">
+    Found {{ m.found_at|format_date }}<br>
+    Linked {{ m.matched_at|format_date }}<br>
+    Updated {{ m.status_updated_at|format_date }}
+    {% if m.ranked_at %}<br>Ranked {{ m.ranked_at|format_date }}{% endif %}
+    {% if m.applied_at %}<br>Recorded {{ m.applied_at|format_date }}{% endif %}
+  </td>
+  <td>
+    <form method="post"
+          action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ m.job_id }}/status?{{ filter_q }}"
+          class="match-status-form"
+          hx-post="{{ base }}/candidates/{{ candidate.id }}/matches/{{ m.job_id }}/status?{{ filter_q }}"
+          hx-target="closest tr"
+          hx-swap="outerHTML">
+      <select name="status">
+        {% for s in statuses %}<option value="{{ s }}" {% if m.status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+      <input name="status_reason" placeholder="Why (optional)" value="{{ m.status_reason or '' }}">
+      <button>Save</button>
+    </form>
+  </td>
+</tr>

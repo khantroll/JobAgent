@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <h1>People</h1>
+  <div>
+    <a class="button primary" href="{{ base }}/candidates/new">Add person</a>
+  </div>
+</section>
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<p class="muted">Each person has their own match list. Search preferences are stored on the candidate record — JobAgent never selects a person by rewriting a global profile file.</p>
+<section class="panel">
+<table>
+  <tr><th>Name</th><th>Location</th><th>Email</th><th>Jobs linked</th><th>HigherEdJobs IDs</th><th></th></tr>
+  {% for p in people %}
+  <tr>
+    <td>{{ p.name }}{% if p.search_enabled is defined and p.search_enabled in (0, '0') %} <span class="muted">(search off)</span>{% endif %}</td>
+    <td>{{ p.location }}</td>
+    <td>{{ p.email }}</td>
+    <td><a href="{{ base }}/candidates/{{ p.id }}/matches">{{ p.match_count }}</a></td>
+    <td class="muted">{% if p.hej_count %}{{ p.hej_preview }}{% else %}<a href="{{ base }}/candidates/{{ p.id }}">Edit → set IDs</a>{% endif %}</td>
+    <td>
+      <a href="{{ base }}/candidates/{{ p.id }}/matches">Matches</a>
+      <a href="{{ base }}/candidates/{{ p.id }}">Edit</a>
+      <a href="{{ base }}/?candidate_id={{ p.id }}">Dashboard</a>
+      <form method="post" action="{{ base }}/candidates/{{ p.id }}/delete" style="display:inline;margin-left:.5rem" hx-boost="false" onsubmit="return confirm('Delete {{ p.name }} and all {{ p.match_count }} linked job matches? This cannot be undone.');">
+        <button type="submit" class="danger">Delete</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">No people yet. Add a person, or import the recovered database with <code>python -m jobagent.cli migrate-legacy</code>.</td></tr>
+  {% endfor %}
+</table>
+</section>
+{% endblock %}

@@ -1,0 +1,144 @@
+Metadata-Version: 2.4
+Name: jobagent
+Version: 2.0.0a2
+Summary: JobAgent 2.0 — shared job catalog with per-candidate matches
+Author: JobAgent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.110.0
+Requires-Dist: uvicorn[standard]>=0.29.0
+Requires-Dist: jinja2>=3.1.0
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: pydantic>=2.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: requests>=2.31.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: feedparser>=6.0.11
+Requires-Dist: beautifulsoup4>=4.12.0
+Requires-Dist: anthropic>=0.25.0
+Requires-Dist: mistralai>=1.5.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: httpx>=0.27.0; extra == "dev"
+Provides-Extra: playwright
+Requires-Dist: playwright>=1.44.0; extra == "playwright"
+
+# JobAgent 2.0.0-alpha.2
+
+Shared job catalog with **per-candidate matches**. Ranking, commute, review status, generated documents, and application bookkeeping live on the candidate-job match — never on the global job listing.
+
+Auto-apply is **disabled**. The schema can record an application state; nothing submits a form or drives a browser.
+
+The recovered June 25 tree in `www/` is forensic evidence. Do not edit it in place.
+
+## Requirements
+
+- Python 3.9+
+- SQLite (stdlib)
+
+## Local startup
+
+```bash
+cd /path/to/JobAgent
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+
+cp .env.example .env        # fill API keys; never commit .env
+cp config/settings.example.yaml config/settings.yaml   # optional local overrides
+
+python -m jobagent.cli init-db
+python -m jobagent.cli doctor
+python -m jobagent.cli serve --host 127.0.0.1 --port 8765
+```
+
+- UI: http://127.0.0.1:8765/
+- REST: http://127.0.0.1:8765/api/docs
+
+**Do not bind this UI to a public interface.** Alpha.2 is a local tool. The default bind address is `127.0.0.1`. Bearer-token API protection is not enough on its own because the HTML UI also shows candidate data and has state-changing controls.
+
+If `JOB_AGENT_API_TOKEN` is unset, both UI and API stay open for local development. If it is set, the UI requires a login cookie and the REST API requires `Authorization: Bearer <token>`. There is no user-account system.
+
+People, titles, resume text, and search preferences are edited in the UI and stored in SQLite. `config/settings.yaml` holds global source/scheduler/routing flags only. Secrets come from `.env`.
+
+The `data/` directory starts empty aside from `.gitkeep`. A fresh database is created by `init-db`. Do not commit `data/jobagent.db`.
+
+## Import the recovered legacy database
+
+The recovered `www/data/jobs.db` is never modified. Import into a database created by `init-db`:
+
+```bash
+python -m jobagent.cli init-db
+python -m jobagent.cli migrate-legacy
+python -m jobagent.cli reconstruct-candidates
+python -m jobagent.cli doctor
+```
+
+Canonical post-import counts for the frozen recovered file:
+
+- 299 shared jobs
+- 2 legacy candidates
+- 7 historical run records
+- **0** historical candidate/job matches
+- 119 ambiguous legacy job-state associations (reported, not guessed)
+
+The importer:
+
+- copies the source read-only and leaves the original file untouched
+- upserts shared job listings (catalog fields only)
+- upserts both candidate records
+- imports match rows **only if they already exist** in the source
+- does **not** attach historical jobs to either candidate
+- reports jobs whose global score/status/commute/documents cannot be attributed to a person
+- does **not** reproduce the old `matches_backfill_v1` bug
+- is safe to rerun (idempotent counts)
+- writes a JSON report under `data/migration_reports/` (gitignored)
+
+After import, reconstruct people from frozen profiles (`reconstruct-candidates`) so Jeffrey Bowers and Tami Wood exist as separate rows. Stubs Test User and Jeff stay in the DB with search off. See `docs/CANDIDATE_RECONSTRUCTION.md`.
+
+Then open **People → Matches → Attach missing jobs** only if you want catalog jobs on a specific person. That is an explicit operator action, not a guessed historical association.
+
+## New jobs vs import
+
+Crawling unions **search-enabled** candidates’ preferences, inserts listings into the **shared** catalog, then creates a **blank match row for each search-enabled candidate**. Ranking is independent per person. Re-inserting the same job URL does not duplicate matches. Legacy import does not use this linking path.
+
+## Discovery, ranking, evaluation
+
+```bash
+python -m jobagent.cli crawl --dry-run
+python -m jobagent.cli rank
+python -m jobagent.cli evaluate
+python -m jobagent.cli evaluate --json
+```
+
+Crawl never submits applications. Rank uses Mistral/Anthropic when keys are present, otherwise a deterministic heuristic (or `llm.provider: mock`). Evaluate does not modify the database.
+
+Full recipe: `docs/JOBAGENT_2_ALPHA2.md`. Source status: `docs/SOURCE_STATUS.md`.
+
+## Dry-run cycle
+
+```bash
+python -m jobagent.cli run-cycle
+python -m jobagent.cli run-cycle --candidate-id 1
+```
+
+Each cycle crawls into the shared catalog, then ranks and evaluates commute **per candidate**. Auto-apply never runs.
+
+## Doctor
+
+```bash
+python -m jobagent.cli doctor
+python -m jobagent.cli doctor --json
+```
+
+Non-destructive: no crawl, no LLM, no candidate mutations, no submissions. Reports version, database path and integrity, migration versions, row counts, auto-apply (must be off), whether UI/API auth is configured, whether settings parse, enabled sources, and whether API keys are present **without printing their values**.
+
+## Tests
+
+```bash
+pytest
+```
+
+## Layout
+
+See `docs/JOBAGENT_2_ALPHA2.md` for discovery/ranking/evaluation. Alpha.1 freeze notes: `docs/JOBAGENT_2_ALPHA1.md`. Architecture boundary: `docs/ARCHITECTURE_BOUNDARY.md`.

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JobAgent 2.0</title>
+  <link rel="stylesheet" href="{{ base }}/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+</head>
+<body hx-boost="true">
+<header class="top">
+  <div><strong>JobAgent</strong><span>{{ version }}</span></div>
+  <nav>
+    {% if ui_authenticated %}
+    <a href="{{ base }}/">Dashboard</a>
+    <a href="{{ base }}/candidates">People</a>
+    <a href="{{ base }}/jobs">Jobs</a>
+    <a href="{{ base }}/runs">Runs</a>
+    {% if auth_configured %}
+    <form method="post" action="{{ base }}/logout" class="nav-form" hx-boost="false">
+      <button type="submit">Sign out</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </nav>
+</header>
+<main>
+  {% block body %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% block body %}
+<h1>Jobs</h1>
+<form class="panel filters" method="get" action="{{ base }}/jobs">
+  <input name="q" placeholder="Search title/company/location" value="{{ q }}">
+  <select name="status">
+    <option value="">Any status</option>
+    {% for s in ['new','needs_review','skipped','applied'] %}
+    <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <input type="number" name="min_score" placeholder="Min score" value="{{ min_score or '' }}">
+  <select name="sort_by">
+    <option value="found_at" {% if sort_by=='found_at' %}selected{% endif %}>Discovered</option>
+    <option value="applied_at" {% if sort_by=='applied_at' %}selected{% endif %}>Applied date</option>
+    <option value="posted_at" {% if sort_by=='posted_at' %}selected{% endif %}>Posted date</option>
+    <option value="status" {% if sort_by=='status' %}selected{% endif %}>Status</option>
+    <option value="score" {% if sort_by=='score' %}selected{% endif %}>Match score</option>
+    <option value="title" {% if sort_by=='title' %}selected{% endif %}>Title</option>
+    <option value="company" {% if sort_by=='company' %}selected{% endif %}>Company</option>
+  </select>
+  <select name="sort_dir">
+    <option value="desc" {% if sort_dir=='desc' %}selected{% endif %}>Newest / highest first</option>
+    <option value="asc" {% if sort_dir=='asc' %}selected{% endif %}>Oldest / lowest first</option>
+  </select>
+  <button>Filter &amp; sort</button>
+</form>
+<section class="panel">
+  <p>{{ total }} matching jobs</p>
+  <table>
+    <tr><th>Score</th><th>Title</th><th>Company</th><th>Location</th><th>Status</th><th>Dates</th><th>Action</th></tr>
+    {% for j in jobs %}
+    <tr>
+      <td>{% if j.score is not none %}{{ j.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>
+        <a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.title }}</a>
+        {% if j.score is none %}<div class="muted">Unscored — run a search cycle on Dashboard</div>
+        {% elif j.score_reason %}<div class="muted">{{ j.score_reason }}</div>{% endif %}
+      <td>{{ j.company }}</td>
+      <td>{{ j.location }}</td>
+      <td>{{ j.status }}</td>
+      <td class="muted">
+        Found {{ j.found_at|format_date }}
+        {% if j.applied_at %}<br>Applied {{ j.applied_at|format_date }}{% endif %}
+      </td>
+      <td>
+        <form method="post" action="{{ base }}/jobs/{{ j.id }}/status">
+          <select name="status">
+            {% for s in ['new','needs_review','skipped','applied'] %}
+            <option value="{{ s }}" {% if j.status==s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <button>Save</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">No jobs found.</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

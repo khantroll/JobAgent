@@ -1,0 +1,68 @@
+{% extends "base.html" %}{% block body %}
+<h1>{% if selected %}Matches for {{ selected.name }}{% else %}Job catalog{% endif %}</h1>
+<p class="muted">{% if selected %}Score, status, and commute belong to this person.{% else %}Shared listings only — pick a person to filter by match status or score.{% endif %}</p>
+<form class="panel filters" method="get" action="{{ base }}/jobs">
+  <input name="q" placeholder="Search title/company/location" value="{{ q }}">
+  <label>Person
+    <select name="candidate_id">
+      <option value="">Catalog</option>
+      {% for p in people %}
+      <option value="{{ p.id }}" {% if selected and selected.id==p.id %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% if selected %}
+  <select name="status">
+    <option value="">Any match status</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <input type="number" name="min_score" placeholder="Min score" value="{{ min_score or '' }}">
+  {% else %}
+  <select name="source">
+    <option value="">Any source</option>
+    {% for s in sources %}
+    <option value="{{ s }}" {% if source==s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <select name="sort_by">
+    {% for f in sort_fields %}
+    <option value="{{ f }}" {% if sort_by==f %}selected{% endif %}>{{ f }}</option>
+    {% endfor %}
+  </select>
+  <select name="sort_dir">
+    <option value="desc" {% if sort_dir=='desc' %}selected{% endif %}>Newest / highest first</option>
+    <option value="asc" {% if sort_dir=='asc' %}selected{% endif %}>Oldest / lowest first</option>
+  </select>
+  <button>Filter &amp; sort</button>
+</form>
+<section class="panel">
+  <p>{{ total }} matching {% if selected %}matches{% else %}jobs{% endif %}</p>
+  <table>
+    <tr>
+      {% if selected %}<th>Score</th><th>Status</th>{% endif %}
+      <th>Title</th><th>Company</th><th>Location</th><th>Source</th><th>Found</th>
+    </tr>
+    {% for j in jobs %}
+    <tr>
+      {% if selected %}
+      <td>{% if j.score is not none %}{{ j.score }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{{ j.status }}{% if j.commute_note %}<div class="muted">{{ j.commute_note }}</div>{% endif %}</td>
+      {% endif %}
+      <td>
+        <a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.title }}</a>
+        {% if selected and j.score_reason %}<div class="muted">{{ j.score_reason }}</div>{% endif %}
+      </td>
+      <td>{{ j.company }}</td>
+      <td>{{ j.location }}</td>
+      <td class="muted">{{ j.source }}</td>
+      <td class="muted">{{ j.found_at|format_date }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">No jobs found.</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

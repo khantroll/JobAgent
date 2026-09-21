@@ -1,0 +1,52 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <h1>People / search profiles</h1>
+  <div>
+    <form method="post" action="{{ base }}/candidates/import-profile" style="display:inline">
+      <button type="submit" class="primary">Import from profile.yaml</button>
+    </form>
+    <a class="button" href="{{ base }}/candidates/new">Add person</a>
+  </div>
+</section>
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<p class="muted">Each person has their own job match list (<strong>Jobs linked</strong>). <strong>HigherEdJobs RSS category IDs</strong> are set per person on <strong>Edit</strong> (not on this list). <strong>Set active</strong> copies that person into <code>config/profile.yaml</code> for crawls.</p>
+<section class="panel">
+  <p class="muted"><strong>Import from profile.yaml</strong> rebuilds a person from the YAML file.
+    If YAML was overwritten, restore the latest backup first (server keeps copies in <code>config/backups/</code>).</p>
+  {% if profile_backups %}
+  <form method="post" action="{{ base }}/candidates/restore-profile-backup" style="margin:.5rem 0" onsubmit="return confirm('Restore profile.yaml from the latest backup? Current file will be saved first.');">
+    <button type="submit">Restore profile.yaml from latest backup ({{ profile_backups[0] }})</button>
+  </form>
+  {% endif %}
+</section>
+<section class="panel">
+<table><tr><th>Name</th><th>Location</th><th>Email</th><th>Jobs linked</th><th>HigherEdJobs IDs</th><th>Active</th><th></th></tr>
+{% for p in people %}
+<tr>
+  <td>{{ p.name }}</td><td>{{ p.location }}</td><td>{{ p.email }}</td>
+  <td><a href="{{ base }}/candidates/{{ p.id }}/matches">{{ p.match_count }}</a></td>
+  <td class="muted">{% if p.hej_count %}{{ p.hej_preview }}{% else %}<a href="{{ base }}/candidates/{{ p.id }}">Edit → set IDs</a>{% endif %}</td>
+  <td>{% if p.active %}Yes{% else %}No{% endif %}</td>
+  <td>
+    <a href="{{ base }}/candidates/{{ p.id }}/matches">Matches</a>
+    <a href="{{ base }}/candidates/{{ p.id }}">Edit</a>
+    {% if not p.active %}
+    <form method="post" action="{{ base }}/candidates/{{ p.id }}/set-active" style="display:inline;margin-left:.5rem">
+      <button type="submit">Set active &amp; write profile.yaml</button>
+    </form>
+    <form method="post" action="{{ base }}/candidates/{{ p.id }}/delete" style="display:inline;margin-left:.5rem" onsubmit="return confirm('Delete {{ p.name }} and all {{ p.match_count }} linked job matches? This cannot be undone.');">
+      <button type="submit" class="danger">Delete</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ base }}/candidates/{{ p.id }}/delete" style="display:inline;margin-left:.5rem" onsubmit="return confirm('{{ p.name }} is currently ACTIVE. Delete them and all {{ p.match_count }} linked job matches? This cannot be undone.');">
+      <button type="submit" class="danger">Delete</button>
+    </form>
+    {% endif %}
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="7">No people yet. Click <strong>Import from profile.yaml</strong> or Add person.</td></tr>
+{% endfor %}
+</table>
+</section>
+{% endblock %}

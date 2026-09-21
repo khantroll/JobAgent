@@ -1,0 +1,18 @@
+[
+  {"id": 46, "name": "Management", "tags": ["management", "manager", "director", "supervisor", "administrator", "lead"]},
+  {"id": 64, "name": "Educational Administration and Leadership", "tags": ["education", "administration", "leadership", "dean", "provost", "registrar"]},
+  {"id": 144, "name": "Information Systems and Technology", "tags": ["information systems", "technology", "it", "cio", "infrastructure"]},
+  {"id": 161, "name": "IT Support and Training", "tags": ["support", "help desk", "desktop", "training", "service desk"]},
+  {"id": 162, "name": "Other IT", "tags": ["it", "technology", "systems", "technical"]},
+  {"id": 173, "name": "Network/System Administrator", "tags": ["network", "system administrator", "sysadmin", "infrastructure", "server", "active directory"]},
+  {"id": 278, "name": "Manager/Director (Administrative)", "tags": ["manager", "director", "administrative", "operations"]},
+  {"id": 279, "name": "Planning, Design, and Project Management", "tags": ["project", "program", "planning", "pmo", "portfolio", "construction", "facilities"]},
+  {"id": 218, "name": "Instructional Technology and Design", "tags": ["instructional", "learning", "lms", "edtech", "design"]},
+  {"id": 171, "name": "IT Manager/Director", "tags": ["it manager", "it director", "technology manager", "infrastructure manager", "cio", "information systems manager"]},
+  {"id": 172, "name": "Software Engineer/Programmer", "tags": ["software", "developer", "engineer", "programmer", "devops"]},
+  {"id": 63, "name": "Human Resources", "tags": ["human resources", "hr", "talent", "recruiting", "people operations"]},
+  {"id": 65, "name": "Business and Financial Services", "tags": ["business", "finance", "budget", "financial", "controller"]},
+  {"id": 66, "name": "Communications, Marketing, and Public Affairs", "tags": ["communications", "marketing", "public affairs", "media"]},
+  {"id": 67, "name": "Development and Fundraising", "tags": ["development", "fundraising", "advancement", "donor"]},
+  {"id": 68, "name": "Facilities - Manager/Director", "tags": ["facilities", "manager", "director", "operations", "campus"]}
+]

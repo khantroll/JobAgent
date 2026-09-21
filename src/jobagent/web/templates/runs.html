@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <h1>Runs</h1>
+  <form method="post" action="{{ base }}/run"><button class="primary">Run dry-run cycle</button></form>
+</section>
+<section class="panel">
+  <h2>Live UI-triggered runs</h2>
+  <table>
+    <tr><th>Started</th><th>Status</th><th>Finished</th><th>Summary/Error</th></tr>
+    {% for r in runs %}
+    <tr><td>{{ r.started_at }}</td><td>{{ r.status }}</td><td>{{ r.finished_at }}</td><td>{% if r.error %}{{ r.error }}{% else %}{{ r.summary }}{% endif %}</td></tr>
+    {% else %}
+    <tr><td colspan="4">No UI-triggered runs yet.</td></tr>
+    {% endfor %}
+  </table>
+</section>
+<section class="panel">
+  <h2>Database run log</h2>
+  <table>
+    <tr><th>When</th><th>Found</th><th>New</th><th>Applied</th><th>Review</th><th>Dry run</th><th>Errors</th></tr>
+    {% for r in history %}
+    <tr><td>{{ r.run_at }}</td><td>{{ r.found }}</td><td>{{ r.new }}</td><td>{{ r.applied }}</td><td>{{ r.flagged }}</td><td>{% if r.dry_run %}yes{% else %}no{% endif %}</td><td>{{ r.errors }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

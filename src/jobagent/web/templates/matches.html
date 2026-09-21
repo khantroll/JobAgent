@@ -1,0 +1,101 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <h1>Job matches — {{ candidate.name }}</h1>
+  <div>
+    <a class="button" href="{{ export_url }}">Export CSV</a>
+    <a class="button" href="{{ base }}/candidates/{{ candidate.id }}">Edit profile</a>
+    <a class="button" href="{{ base }}/candidates">People</a>
+  </div>
+</section>
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<section class="panel">
+  <p><strong>This list belongs only to {{ candidate.name }}.</strong> Score, commute, documents, and application state never live on the shared job listing.</p>
+  <p class="muted"><strong>{{ total_all }}</strong> job(s) linked.
+    {% if duplicate_count %}<strong>{{ duplicate_count }}</strong> look like duplicates.{% endif %}
+  </p>
+  {% if total_all == 0 %}
+  <p class="muted">Attach jobs already in the catalog, or run a dry-run cycle (new crawls link to every person).</p>
+  {% endif %}
+</section>
+<p class="panel muted"><strong>Auto-apply is disabled</strong> in 2.0.0-alpha.2. You can record a status of <code>applied</code> for bookkeeping; JobAgent will not submit applications.</p>
+<form class="panel filters" method="get" action="{{ base }}/candidates/{{ candidate.id }}/matches">
+  <label>Status
+    <select name="status">
+      <option value="">Any</option>
+      {% for s in statuses %}<option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Source
+    <select name="source">
+      <option value="">Any</option>
+      {% for s in catalog_sources %}<option value="{{ s }}" {% if source==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Work type
+    <select name="work_type">
+      <option value="">Any</option>
+      {% for w in work_types %}<option value="{{ w }}" {% if work_type==w %}selected{% endif %}>{{ w }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Search <input name="q" value="{{ q }}" placeholder="Title / company / location / explanation"></label>
+  <label>Min score <input type="number" name="min_score" value="{{ min_score }}"></label>
+  <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="date_to" value="{{ date_to }}"></label>
+  <label>Date applies to
+    <select name="date_field">
+      <option value="matched_at" {% if date_field=='matched_at' %}selected{% endif %}>Linked to person</option>
+      <option value="status_updated_at" {% if date_field=='status_updated_at' %}selected{% endif %}>Status updated</option>
+      <option value="found_at" {% if date_field=='found_at' %}selected{% endif %}>Job discovered</option>
+      <option value="applied_at" {% if date_field=='applied_at' %}selected{% endif %}>Applied</option>
+      <option value="ranked_at" {% if date_field=='ranked_at' %}selected{% endif %}>Ranked</option>
+    </select>
+  </label>
+  <label>Sort by
+    <select name="sort_by">
+      <option value="status_updated_at" {% if sort_by=='status_updated_at' %}selected{% endif %}>Status updated</option>
+      <option value="matched_at" {% if sort_by=='matched_at' %}selected{% endif %}>Linked date</option>
+      <option value="found_at" {% if sort_by=='found_at' %}selected{% endif %}>Job discovered</option>
+      <option value="applied_at" {% if sort_by=='applied_at' %}selected{% endif %}>Applied date</option>
+      <option value="status" {% if sort_by=='status' %}selected{% endif %}>Status</option>
+      <option value="score" {% if sort_by=='score' %}selected{% endif %}>Match score</option>
+      <option value="ranked_at" {% if sort_by=='ranked_at' %}selected{% endif %}>Ranked</option>
+      <option value="title" {% if sort_by=='title' %}selected{% endif %}>Title</option>
+      <option value="company" {% if sort_by=='company' %}selected{% endif %}>Company</option>
+    </select>
+  </label>
+  <label>Order
+    <select name="sort_dir">
+      <option value="desc" {% if sort_dir=='desc' %}selected{% endif %}>Newest / highest first</option>
+      <option value="asc" {% if sort_dir=='asc' %}selected{% endif %}>Oldest / lowest first</option>
+    </select>
+  </label>
+  <label><input type="checkbox" name="hide_duplicates" value="1" {% if hide_duplicates %}checked{% endif %}> Hide duplicates</label>
+  <button type="submit">Filter &amp; sort</button>
+  <a class="button" href="{{ show_all_url }}">Clear</a>
+</form>
+{% if duplicate_count %}
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/ignore-duplicates?{{ filter_q }}">
+  <button type="submit">Ignore {{ duplicate_count }} duplicate(s)</button>
+</form>
+{% endif %}
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/link-all?{{ filter_q }}">
+  <p class="muted">Adds any catalog listings missing from <strong>{{ candidate.name }}'s</strong> list. Does not copy another person's score, commute, or application state.</p>
+  <button type="submit">Attach missing jobs to {{ candidate.name }}</button>
+</form>
+<form class="panel" method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/clear?{{ filter_q }}" hx-boost="false" onsubmit="return confirm('Remove ALL job links from {{ candidate.name }}? Jobs stay in the catalog.');">
+  <button type="submit">Clear {{ candidate.name }}'s job list</button>
+</form>
+<section class="panel">
+  <p><strong>{{ total }}</strong> row(s) shown</p>
+  <table>
+    <tr>
+      <th>Status</th><th>Title</th><th>Company</th><th>Salary</th><th>Score</th><th>Explanation</th><th>Commute</th><th>Dup</th><th>Dates</th><th>Update</th>
+    </tr>
+    {% for m in matches %}
+      {% include "match_row.html" %}
+    {% else %}
+    <tr><td colspan="10">Nothing to show.{% if total_all == 0 %} Use “Attach missing jobs” or run a crawl.{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <div>
+    <h1>Dashboard</h1>
+    {% if active %}<p>Active search profile: <strong>{{ active.name }}</strong> — {{ active.location }}</p>{% else %}<p>No active search profile yet.</p>{% endif %}
+  </div>
+  <form method="post" action="{{ base }}/run"><button class="primary">Run search cycle now</button></form>
+  {% if run_error %}<p class="error">{{ run_error }}</p>{% endif %}
+</section>
+<div class="cards">
+  <div class="card"><b>{{ stats.total }}</b><span>Total jobs</span></div>
+  <div class="card"><b>{{ stats.unscored }}</b><span>Unscored{% if stats.unscored %} — run cycle{% endif %}</span></div>
+  {% for status, count in stats['by_status'].items() %}<div class="card"><b>{{ count }}</b><span>{{ status }}</span></div>{% endfor %}
+</div>
+<section class="panel">
+  <h2>Last database runs</h2>
+  <table><tr><th>When</th><th>Found</th><th>Applied</th><th>Review</th><th>Errors</th></tr>
+  {% for r in history %}<tr><td>{{ r.run_at }}</td><td>{{ r.new }}</td><td>{{ r.applied }}</td><td>{{ r.flagged }}</td><td>{{ r.errors }}</td></tr>{% else %}<tr><td colspan="5">No run history yet.</td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}

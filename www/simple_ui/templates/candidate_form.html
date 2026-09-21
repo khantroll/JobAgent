@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% block body %}
+<h1>{% if candidate %}Edit {{ candidate.name }}{% else %}Add person{% endif %}</h1>
+{% if candidate %}<p><a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches">Job matches (export &amp; status)</a></p>{% endif %}
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<form class="panel form" method="post" action="{{ base }}/candidates/save" enctype="multipart/form-data">
+  {% if candidate %}<input type="hidden" name="candidate_id" value="{{ candidate.id }}">{% endif %}
+  <div class="grid"><label>Name<input name="name" required value="{{ candidate.name if candidate else '' }}"></label><label>Email<input name="email" value="{{ candidate.email if candidate else '' }}"></label><label>Phone<input name="phone" value="{{ candidate.phone if candidate else '' }}"></label><label>Location<input name="location" value="{{ candidate.location if candidate else '' }}"></label><label>LinkedIn<input name="linkedin" value="{{ candidate.linkedin if candidate else '' }}"></label><label>GitHub<input name="github" value="{{ candidate.github if candidate else '' }}"></label></div>
+  <label>Resume upload <input type="file" name="resume_file"></label>
+  {% if candidate and candidate.resume_file %}<p class="muted">Current file: {{ candidate.resume_file }}</p>{% endif %}
+  <label>Resume text used by the agent<textarea name="resume_text" rows="14">{{ candidate.resume_text if candidate else '' }}</textarea></label>
+  <label>Possible job titles, one per line<textarea name="titles_text" rows="8">{% if candidate %}{% for t in candidate.titles %}{{ t.title }}
+{% endfor %}{% endif %}</textarea></label>
+  <h2>Search preferences (saved per person)</h2>
+  <p class="muted">These stay with this profile—not copied from whoever is active. Use <strong>Use for job search</strong> to copy them into <code>config/profile.yaml</code> for the agent.</p>
+  <div class="grid">
+    <label>Min score<input type="number" name="min_score" value="{{ search_defaults.min_score }}"></label>
+    <label>Salary min<input type="number" name="salary_min" value="{{ search_defaults.salary_min }}"></label>
+    <label>Salary max<input type="number" name="salary_max" value="{{ search_defaults.salary_max }}"></label>
+  </div>
+  <label>Keywords, one per line<textarea name="keywords" rows="5">{{ search_defaults.keywords }}</textarea></label>
+  <h2>HigherEdJobs RSS categories (per person)</h2>
+  <p class="muted">HigherEdJobs has no search API—each <strong>category ID</strong> is its own RSS feed. IT titles and Project Manager titles use different IDs. Saved here for this person; crawls use whoever is <strong>active</strong>.</p>
+  <label>Category IDs, one per line
+    <textarea name="hej_category_ids" rows="6">{{ hej_category_ids }}</textarea>
+  </label>
+  {% if hej_labels %}<p class="muted">Current: {% for l in hej_labels %}{{ l }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  {% if candidate %}
+  <button type="submit" formaction="{{ base }}/candidates/{{ candidate.id }}/suggest-hej-categories" formmethod="post">Suggest IDs from job titles above</button>
+  {% endif %}
+  {% if hej_suggestions %}
+  <details class="panel"><summary>Suggested from titles (click to copy into box)</summary>
+    <ul>{% for s in hej_suggestions %}<li><strong>{{ s.id }}</strong> — {{ s.name }} ({{ s.matched_titles|join(', ') }})</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  <details><summary class="muted">All known category IDs (reference)</summary>
+    <ul class="muted">{% for c in hej_catalog %}<li>{{ c.id }} — {{ c.name }}</li>{% endfor %}</ul>
+  </details>
+  <h2>Possible employers</h2>
+  <p class="muted">Use Workday for careers pages/Workday URLs, Greenhouse for boards.greenhouse.io slugs, and Lever for jobs.lever.co slugs.</p>
+  <div id="employers">
+    {% set emps = candidate.employers if candidate else [] %}
+    {% for e in emps %}
+      {% include "employer_row.html" %}
+    {% endfor %}
+    {% if not emps %}{% set e = {} %}{% include "employer_row.html" %}{% endif %}
+  </div>
+  <button type="button" onclick="addEmployer()">Add employer row</button>
+  <p>
+    <button type="submit" class="primary">Save</button>
+    {% if candidate %}
+    <button type="submit" class="primary" formaction="{{ base }}/candidates/{{ candidate.id }}/activate" formmethod="post">Set active &amp; write profile.yaml</button>
+    {% endif %}
+  </p>
+</form>
+<template id="employer-template">{% set e = {} %}{% include "employer_row.html" %}</template>
+<script>function addEmployer(){document.getElementById('employers').insertAdjacentHTML('beforeend', document.getElementById('employer-template').innerHTML);}</script>
+{% endblock %}
