@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% block body %}
+<section class="hero">
+  <div>
+    <h1>Application package</h1>
+    <p><strong>{{ candidate.name }}</strong> — {{ match.title }} at {{ match.company }}</p>
+  </div>
+  <a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches">Back to matches</a>
+</section>
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<section class="panel">
+  <p><strong>Human review required.</strong> JobAgent can draft and save this candidate/job-specific package, but it does not submit applications.</p>
+  {% if not package.generated %}
+  <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/generate">
+    <button type="submit">Generate resume + cover letter</button>
+  </form>
+  {% else %}
+  <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package">
+    <label>Tailored resume
+      <textarea name="resume_text" rows="24">{{ package.resume_text }}</textarea>
+    </label>
+    <label>Cover letter
+      <textarea name="cover_text" rows="16">{{ package.cover_text }}</textarea>
+    </label>
+    <button type="submit">Save reviewed package</button>
+  </form>
+  <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/generate"
+        onsubmit="return confirm('Regenerate and replace the current package drafts?');">
+    <button type="submit">Regenerate drafts</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}
