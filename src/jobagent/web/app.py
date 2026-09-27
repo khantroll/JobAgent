@@ -263,6 +263,8 @@ def _match_query_params(
     source: str = "",
     work_type: str = "",
     package_state: str = "",
+    application_stage: str = "",
+    follow_up: str = "",
 ) -> str:
     params = {
         "date_field": date_field,
@@ -287,6 +289,10 @@ def _match_query_params(
         params["work_type"] = work_type
     if package_state:
         params["package_state"] = package_state
+    if application_stage:
+        params["application_stage"] = application_stage
+    if follow_up:
+        params["follow_up"] = follow_up
     return urlencode(params)
 
 
@@ -304,6 +310,8 @@ def _match_query_from_request(qp) -> str:
         source=qp.get("source", ""),
         work_type=qp.get("work_type", ""),
         package_state=qp.get("package_state", ""),
+        application_stage=qp.get("application_stage", ""),
+        follow_up=qp.get("follow_up", ""),
     )
 
 
@@ -323,6 +331,8 @@ def candidate_matches(
     source: str = "",
     work_type: str = "",
     package_state: str = "",
+    application_stage: str = "",
+    follow_up: str = "",
 ):
     init_db()
     cand = cand_repo.get_candidate(cid)
@@ -354,6 +364,8 @@ def candidate_matches(
         source=source or None,
         work_type=work_type or None,
         package_state=package_state or None,
+        application_stage=application_stage or None,
+        follow_up=follow_up or None,
     )
     match_repo.annotate_match_duplicates(rows)
     duplicate_count = sum(1 for r in rows if r.get("is_duplicate"))
@@ -362,7 +374,7 @@ def candidate_matches(
         total = len(rows)
     qstr = _match_query_params(
         status, date_from, date_to, date_field, sort_by, sort_dir, hide_duplicates, q, min_score,
-        source, work_type, package_state,
+        source, work_type, package_state, application_stage, follow_up,
     )
     return _render(
         request,
@@ -383,6 +395,9 @@ def candidate_matches(
             "source": source,
             "work_type": work_type,
             "package_state": package_state,
+            "application_stage": application_stage,
+            "follow_up": follow_up,
+            "application_stages": sorted(match_repo.APPLICATION_STAGES),
             "catalog_sources": job_repo.list_sources(),
             "work_types": ["remote", "hybrid", "onsite"],
             "date_filter_on": bool(date_from or date_to),
