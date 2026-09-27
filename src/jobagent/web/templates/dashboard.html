@@ -33,6 +33,8 @@
   <div class="card"><b>{{ stats.unscored }}</b><span>Unscored</span></div>
   <a class="card card-link" href="{{ base }}/candidates/{{ selected.id }}/matches?package_state=needed"><b>{{ stats.package_needed }}</b><span>Packages needed</span></a>
   <div class="card"><b>{{ stats.package_ready }}</b><span>Packages ready</span></div>
+  <div class="card"><b>{{ stats.follow_up_due }}</b><span>Follow-ups due</span></div>
+  {% for stage, count in stats.by_application_stage.items() %}<div class="card"><b>{{ count }}</b><span>{{ stage|replace('_', ' ') }} applications</span></div>{% endfor %}
   {% for status, count in stats['by_status'].items() %}<div class="card"><b>{{ count }}</b><span>{{ status }}</span></div>{% endfor %}
   {% else %}
   <div class="card"><b>{{ stats.candidates }}</b><span>Candidates</span></div>
