@@ -21,7 +21,7 @@ def test_doctor_reports_fresh_db_without_mutating_or_leaking_secrets(db_path, mo
     assert report["version"]
     assert report["database_path"] == str(db_path)
     assert report["integrity"] == "ok"
-    assert report["migrations"] == ["001_initial", "002_ranking_and_search"]
+    assert report["migrations"] == ["001_initial", "002_ranking_and_search", "003_application_tracking"]
     assert report["counts"]["jobs"] == before_jobs
     assert report["counts"]["candidates"] == before_cands
     assert report["counts"]["matches"] == before_matches
