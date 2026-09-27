@@ -30,3 +30,10 @@ def test_dashboard_stats_include_package_queue(db_path):
     stats = match_repo.dashboard_stats(cid)
     assert stats["package_ready"] == 1
     assert stats["package_needed"] == 1
+
+
+    needed, needed_total = match_repo.list_matches(cid, package_state="needed")
+    ready, ready_total = match_repo.list_matches(cid, package_state="ready")
+    assert needed_total == 1
+    assert ready_total == 1
+    assert needed[0]["job_id"] != ready[0]["job_id"]
