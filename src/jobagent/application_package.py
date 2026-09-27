@@ -37,8 +37,8 @@ def generate_package(candidate_id: int, job_id: str) -> dict:
     match = match_repo.get_match(candidate_id, job_id)
     if not candidate or not match:
         raise PackageError("Candidate/job match not found.")
-    if match.get("status") in {"ignored", "rejected"}:
-        raise PackageError("Approve the match before generating an application package.")
+    if match.get("status") != "reviewed":
+        raise PackageError("Set the match status to reviewed before generating an application package.")
     if not (candidate.get("resume_text") or "").strip():
         raise PackageError("Candidate resume text is required before generation.")
     config = candidate_runtime_config(candidate, load_settings())
