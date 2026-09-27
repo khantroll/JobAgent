@@ -17,7 +17,7 @@
   <p class="muted">Attach jobs already in the catalog, or run a dry-run cycle (new crawls link to every person).</p>
   {% endif %}
 </section>
-<p class="panel muted"><strong>Auto-apply is disabled</strong> in 2.0.0-alpha.2. You can record a status of <code>applied</code> for bookkeeping; JobAgent will not submit applications.</p>
+<p class="panel muted"><strong>Auto-apply is disabled</strong> in {{ version }}. You can record a status of <code>applied</code> for bookkeeping; JobAgent will not submit applications.</p>
 <form class="panel filters" method="get" action="{{ base }}/candidates/{{ candidate.id }}/matches">
   <label>Status
     <select name="status">
@@ -35,6 +35,13 @@
     <select name="work_type">
       <option value="">Any</option>
       {% for w in work_types %}<option value="{{ w }}" {% if work_type==w %}selected{% endif %}>{{ w }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Package
+    <select name="package_state">
+      <option value="">Any</option>
+      <option value="needed" {% if package_state=='needed' %}selected{% endif %}>Needed</option>
+      <option value="ready" {% if package_state=='ready' %}selected{% endif %}>Ready</option>
     </select>
   </label>
   <label>Search <input name="q" value="{{ q }}" placeholder="Title / company / location / explanation"></label>

@@ -2,7 +2,7 @@
 <section class="hero">
   <div>
     <h1>Dashboard</h1>
-    <p class="muted">Shared job catalog with per-candidate matches. Auto-apply is disabled in alpha.2.</p>
+    <p class="muted">Shared job catalog with per-candidate matches. Auto-apply is disabled in {{ version }}.</p>
     <p class="muted">The UI binds to 127.0.0.1 by default and must not be exposed on a public interface.</p>
     {% if selected %}
     <p>Match counts for <strong>{{ selected.name }}</strong> — {{ selected.location }}</p>
@@ -31,6 +31,8 @@
   {% if selected %}
   <div class="card"><b>{{ stats.total }}</b><span>Matches for {{ selected.name }}</span></div>
   <div class="card"><b>{{ stats.unscored }}</b><span>Unscored</span></div>
+  <a class="card card-link" href="{{ base }}/candidates/{{ selected.id }}/matches?package_state=needed"><b>{{ stats.package_needed }}</b><span>Packages needed</span></a>
+  <div class="card"><b>{{ stats.package_ready }}</b><span>Packages ready</span></div>
   {% for status, count in stats['by_status'].items() %}<div class="card"><b>{{ count }}</b><span>{{ status }}</span></div>{% endfor %}
   {% else %}
   <div class="card"><b>{{ stats.candidates }}</b><span>Candidates</span></div>
