@@ -37,6 +37,13 @@
       {% for w in work_types %}<option value="{{ w }}" {% if work_type==w %}selected{% endif %}>{{ w }}</option>{% endfor %}
     </select>
   </label>
+  <label>Package
+    <select name="package_state">
+      <option value="">Any</option>
+      <option value="needed" {% if package_state=='needed' %}selected{% endif %}>Needed</option>
+      <option value="ready" {% if package_state=='ready' %}selected{% endif %}>Ready</option>
+    </select>
+  </label>
   <label>Search <input name="q" value="{{ q }}" placeholder="Title / company / location / explanation"></label>
   <label>Min score <input type="number" name="min_score" value="{{ min_score }}"></label>
   <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
