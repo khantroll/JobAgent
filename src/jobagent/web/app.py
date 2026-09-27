@@ -261,6 +261,7 @@ def _match_query_params(
     min_score: str = "",
     source: str = "",
     work_type: str = "",
+    package_state: str = "",
 ) -> str:
     params = {
         "date_field": date_field,
@@ -283,6 +284,8 @@ def _match_query_params(
         params["source"] = source
     if work_type:
         params["work_type"] = work_type
+    if package_state:
+        params["package_state"] = package_state
     return urlencode(params)
 
 
@@ -299,6 +302,7 @@ def _match_query_from_request(qp) -> str:
         min_score=qp.get("min_score", ""),
         source=qp.get("source", ""),
         work_type=qp.get("work_type", ""),
+        package_state=qp.get("package_state", ""),
     )
 
 
@@ -317,6 +321,7 @@ def candidate_matches(
     min_score: str = "",
     source: str = "",
     work_type: str = "",
+    package_state: str = "",
 ):
     init_db()
     cand = cand_repo.get_candidate(cid)
@@ -347,6 +352,7 @@ def candidate_matches(
         min_score=min_score_val,
         source=source or None,
         work_type=work_type or None,
+        package_state=package_state or None,
     )
     match_repo.annotate_match_duplicates(rows)
     duplicate_count = sum(1 for r in rows if r.get("is_duplicate"))
@@ -355,7 +361,7 @@ def candidate_matches(
         total = len(rows)
     qstr = _match_query_params(
         status, date_from, date_to, date_field, sort_by, sort_dir, hide_duplicates, q, min_score,
-        source, work_type,
+        source, work_type, package_state,
     )
     return _render(
         request,
@@ -375,6 +381,7 @@ def candidate_matches(
             "min_score": min_score,
             "source": source,
             "work_type": work_type,
+            "package_state": package_state,
             "catalog_sources": job_repo.list_sources(),
             "work_types": ["remote", "hybrid", "onsite"],
             "date_filter_on": bool(date_from or date_to),
