@@ -492,6 +492,7 @@ def list_matches(
     q: str | None = None,
     source: str | None = None,
     work_type: str | None = None,
+    package_state: str | None = None,
     limit: int = 500,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
@@ -531,6 +532,14 @@ def list_matches(
     if work_type:
         clauses.append("m.work_type = ?")
         params.append(work_type)
+    if package_state == "needed":
+        clauses.append("m.status = 'reviewed'")
+        clauses.append("(m.resume_path IS NULL OR m.resume_path='' OR m.cover_path IS NULL OR m.cover_path='')")
+    elif package_state == "ready":
+        clauses.append("m.resume_path IS NOT NULL AND m.resume_path!=''")
+        clauses.append("m.cover_path IS NOT NULL AND m.cover_path!=''")
+    elif package_state:
+        raise ValueError("package_state must be 'needed' or 'ready'")
     where = " AND ".join(clauses)
     sql = f"{_match_select()} WHERE {where} {_match_order_clause(sort_by, sort_dir)}"
     with get_conn() as conn:
