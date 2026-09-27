@@ -4,7 +4,7 @@ Shared job catalog with **per-candidate matches**. Ranking, commute, review stat
 
 Auto-apply is **disabled**. The schema can record an application state; nothing submits a form or drives a browser.
 
-The recovered June 25 tree in `www/` is forensic evidence. Do not edit it in place.
+The recovered June 25 source tree in `www/` is forensic evidence. Do not edit it in place. Runtime/private artifacts such as its historical SQLite database are intentionally not published.
 
 ## Requirements
 
@@ -39,18 +39,20 @@ People, titles, resume text, and search preferences are edited in the UI and sto
 
 The `data/` directory starts empty aside from `.gitkeep`. A fresh database is created by `init-db`. Do not commit `data/jobagent.db`.
 
-## Import the recovered legacy database
+## Optional import of the recovered legacy database
 
-The recovered `www/data/jobs.db` is never modified. Import into a database created by `init-db`:
+A fresh clone is a clean JobAgent 2.0 installation and does **not** contain the recovered legacy SQLite database. The historical database contains private/runtime data and is intentionally excluded from GitHub.
+
+If you separately possess the preserved June 25 `jobs.db`, import it by passing its path explicitly. The source is opened read-only and is never modified:
 
 ```bash
 python -m jobagent.cli init-db
-python -m jobagent.cli migrate-legacy
+python -m jobagent.cli migrate-legacy --source /path/to/preserved/jobs.db
 python -m jobagent.cli reconstruct-candidates
 python -m jobagent.cli doctor
 ```
 
-Canonical post-import counts for the frozen recovered file:
+Canonical post-import counts for the separately preserved frozen file:
 
 - 299 shared jobs
 - 2 legacy candidates
