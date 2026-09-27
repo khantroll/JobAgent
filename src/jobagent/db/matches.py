@@ -12,7 +12,15 @@ from jobagent.db.connection import get_conn, row_to_dict
 MATCH_STATUSES = frozenset({"new", "reviewed", "applied", "rejected", "ignored"})
 REVIEW_STATUSES = frozenset({"pending", "needs_review", "skipped", "cleared"})
 APPLICATION_STATES = frozenset({"none", "recorded", "failed"})
-APPLICATION_STAGES = frozenset({"not_applied", "applied", "screening", "interview", "offer", "rejected", "withdrawn"})
+APPLICATION_STAGES = frozenset({"not_applied", "applied", "screening", "interview", "offer", "accepted", "rejected", "withdrawn", "declined_offer", "closed", "no_response"})
+TERMINAL_APPLICATION_STAGES = frozenset({"accepted", "rejected", "withdrawn", "declined_offer", "closed", "no_response"})
+APPLICATION_TRANSITIONS = {
+    "not_applied": frozenset({"applied", "withdrawn", "closed"}),
+    "applied": frozenset({"screening", "interview", "offer", "rejected", "withdrawn", "closed", "no_response"}),
+    "screening": frozenset({"interview", "offer", "rejected", "withdrawn", "closed", "no_response"}),
+    "interview": frozenset({"interview", "offer", "rejected", "withdrawn", "closed", "no_response"}),
+    "offer": frozenset({"accepted", "declined_offer", "withdrawn"}),
+}
 COMMUTE_RESULTS = frozenset({"auto_apply", "needs_review", "skip"})
 MATCH_SORT_FIELDS = frozenset(
     {
@@ -398,34 +406,61 @@ def update_application_tracking(
     channel: str = "",
     follow_up_at: str | None = None,
     notes: str = "",
+    next_action: str = "",
 ) -> bool:
     if stage not in APPLICATION_STAGES:
         raise ValueError(f"stage must be one of {sorted(APPLICATION_STAGES)}")
     now = _utcnow()
+    current = get_match(candidate_id, job_id)
+    if not current:
+        return False
+    previous_stage = current.get("application_stage") or "not_applied"
+    if stage != previous_stage and previous_stage in TERMINAL_APPLICATION_STAGES:
+        raise ValueError(f"terminal application stage {previous_stage!r} cannot transition to {stage!r}")
+    allowed = APPLICATION_TRANSITIONS.get(previous_stage)
+    if stage != previous_stage and allowed is not None and stage not in allowed:
+        raise ValueError(f"application stage cannot transition from {previous_stage!r} to {stage!r}")
     applied = (applied_at or "").strip() or None
     follow_up = (follow_up_at or "").strip() or None
     if stage != "not_applied" and not applied:
-        current = get_match(candidate_id, job_id)
-        applied = (current or {}).get("applied_at") or now
-    terminal = stage in {"offer", "rejected", "withdrawn"}
+        applied = current.get("applied_at") or now
+    terminal = stage in TERMINAL_APPLICATION_STAGES
     status = "applied" if stage not in {"not_applied", "rejected"} else ("rejected" if stage == "rejected" else None)
     application_state = "recorded" if stage != "not_applied" else "none"
     with get_conn() as conn:
         cur = conn.execute(
             """
             UPDATE candidate_job_matches
-            SET application_stage=?, application_channel=?, application_notes=?,
+            SET application_stage=?, application_channel=?, application_notes=?, next_action=?,
                 follow_up_at=?, outcome_at=?, applied_at=?, application_state=?,
                 status=COALESCE(?, status), status_updated_at=?, updated_at=?
             WHERE candidate_id=? AND job_id=?
             """,
             (
-                stage, channel.strip(), notes.strip(), follow_up,
+                stage, channel.strip(), notes.strip(), next_action.strip(), follow_up,
                 now if terminal else None, applied, application_state, status,
                 now, now, candidate_id, job_id,
             ),
         )
-        return cur.rowcount > 0
+        changed = cur.rowcount > 0
+    if changed and stage != previous_stage:
+        from jobagent.db import applications as application_repo
+        application_repo.add_event(
+            candidate_id, job_id, "stage_changed",
+            from_stage=previous_stage, to_stage=stage, note=notes,
+        )
+    return changed
+
+
+def update_submitted_documents(candidate_id: int, job_id: str, resume_path: str, cover_path: str) -> None:
+    now = _utcnow()
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE candidate_job_matches
+               SET submitted_resume_path=?, submitted_cover_path=?, updated_at=?
+               WHERE candidate_id=? AND job_id=?""",
+            (resume_path, cover_path, now, candidate_id, job_id),
+        )
 
 
 def update_match_documents(candidate_id: int, job_id: str, resume_path: str, cover_path: str) -> None:
@@ -755,6 +790,9 @@ def export_matches_csv(candidate_id: int, **kwargs) -> str:
         "application_notes",
         "follow_up_at",
         "outcome_at",
+        "next_action",
+        "submitted_resume_path",
+        "submitted_cover_path",
         "salary_raw",
         "job_id",
     ]
