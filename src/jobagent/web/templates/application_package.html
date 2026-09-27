@@ -2,18 +2,28 @@
 <section class="hero">
   <div>
     <h1>Application package</h1>
-    <p><strong>{{ candidate.name }}</strong> — {{ match.title }} at {{ match.company }}</p>
+    <p><strong>{{ candidate.name }}</strong> — <a href="{{ match.url }}" target="_blank" rel="noopener">{{ match.title }}</a> at {{ match.company }}</p>
   </div>
   <a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches">Back to matches</a>
 </section>
 {% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<section class="panel package-summary">
+  <div><strong>Status</strong><br>{{ "Draft package ready for review" if package.generated else "Reviewed match — package not generated" }}</div>
+  <div><strong>Match score</strong><br>{{ match.score if match.score is not none else "—" }}</div>
+  <div><strong>Work type</strong><br>{{ match.work_type or "—" }}</div>
+  <div><strong>Application</strong><br>{{ match.application_state or "none" }}</div>
+</section>
 <section class="panel">
-  <p><strong>Human review required.</strong> JobAgent can draft and save this candidate/job-specific package, but it does not submit applications.</p>
+  <p><strong>Human review required.</strong> JobAgent drafts and saves this candidate/job-specific package. It does not submit applications.</p>
   {% if not package.generated %}
   <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/generate">
-    <button type="submit">Generate resume + cover letter</button>
+    <button class="primary" type="submit">Generate resume + cover letter</button>
   </form>
   {% else %}
+  <div class="package-actions">
+    <a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/resume.txt">Download resume</a>
+    <a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/cover-letter.txt">Download cover letter</a>
+  </div>
   <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package">
     <label>Tailored resume
       <textarea name="resume_text" rows="24">{{ package.resume_text }}</textarea>
@@ -21,10 +31,10 @@
     <label>Cover letter
       <textarea name="cover_text" rows="16">{{ package.cover_text }}</textarea>
     </label>
-    <button type="submit">Save reviewed package</button>
+    <button class="primary" type="submit">Save reviewed package</button>
   </form>
   <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/generate"
-        onsubmit="return confirm('Regenerate and replace the current package drafts?');">
+        onsubmit="return confirm('Regenerate and replace the current package drafts? Your saved edits will be overwritten.');">
     <button type="submit">Regenerate drafts</button>
   </form>
   {% endif %}
