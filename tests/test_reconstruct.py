@@ -5,6 +5,7 @@ from pathlib import Path
 from jobagent.db import candidates as cand_repo
 from jobagent.db import jobs as job_repo
 from jobagent.db import matches as match_repo
+import jobagent.reconstruct as reconstruct_module
 from jobagent.reconstruct import load_legacy_yaml, reconstruct_candidates
 from jobagent.ranking import heuristic_score, run_ranking, score_job
 
@@ -25,7 +26,34 @@ def test_load_legacy_yaml_drops_secrets(tmp_path: Path):
     assert data["profile"]["name"] == "Someone"
 
 
-def test_reconstruct_does_not_merge_jeff_stub_with_jeffrey(db_path):
+def test_reconstruct_does_not_merge_jeff_stub_with_jeffrey(db_path, tmp_path, monkeypatch):
+    # Reconstruction must be testable without the private legacy profile files.
+    # Use synthetic evidence that exercises the same identity-separation rule.
+    jeffrey_profile = tmp_path / "jeffrey.yaml"
+    jeffrey_profile.write_text(
+        "profile:\n"
+        "  name: Jeffrey Bowers\n"
+        "  email: khantroll@gmail.com\n"
+        "search:\n"
+        "  titles:\n"
+        "    - IT Manager\n"
+        "  salary_min: 80000\n"
+        "  salary_max: 150000\n",
+        encoding="utf-8",
+    )
+    tami_profile = tmp_path / "tami.yaml"
+    tami_profile.write_text(
+        "profile:\n"
+        "  name: Tami Wood\n"
+        "  email: tami.wood@fortsmithar.gov\n"
+        "search:\n"
+        "  titles:\n"
+        "    - Telecommunications Manager\n"
+        "  keywords: []\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(reconstruct_module, "JEFFREY_PROFILE", jeffrey_profile)
+    monkeypatch.setattr(reconstruct_module, "TAMI_PROFILE", tami_profile)
     cand_repo.insert_candidate_with_id(
         {
             "id": 1,
