@@ -563,9 +563,28 @@ def dashboard_stats(candidate_id: int | None = None) -> dict:
                 (candidate_id,),
             ).fetchone()[0]
             total_jobs = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+            package_needed = conn.execute(
+                """
+                SELECT COUNT(*) FROM candidate_job_matches
+                WHERE candidate_id=? AND status='reviewed'
+                  AND (resume_path IS NULL OR resume_path='' OR cover_path IS NULL OR cover_path='')
+                """,
+                (candidate_id,),
+            ).fetchone()[0]
+            package_ready = conn.execute(
+                """
+                SELECT COUNT(*) FROM candidate_job_matches
+                WHERE candidate_id=?
+                  AND resume_path IS NOT NULL AND resume_path!=''
+                  AND cover_path IS NOT NULL AND cover_path!=''
+                """,
+                (candidate_id,),
+            ).fetchone()[0]
             return {
                 "by_status": by_status,
                 "unscored": unscored,
+                "package_needed": package_needed,
+                "package_ready": package_ready,
                 "total": sum(by_status.values()),
                 "catalog_jobs": total_jobs,
             }
