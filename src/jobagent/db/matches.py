@@ -15,7 +15,7 @@ APPLICATION_STATES = frozenset({"none", "recorded", "failed"})
 APPLICATION_STAGES = frozenset({"not_applied", "applied", "screening", "interview", "offer", "accepted", "rejected", "withdrawn", "declined_offer", "closed", "no_response"})
 TERMINAL_APPLICATION_STAGES = frozenset({"accepted", "rejected", "withdrawn", "declined_offer", "closed", "no_response"})
 APPLICATION_TRANSITIONS = {
-    "not_applied": frozenset({"applied", "withdrawn", "closed"}),
+    "not_applied": frozenset({"applied", "screening", "interview", "offer", "withdrawn", "closed", "no_response"}),
     "applied": frozenset({"screening", "interview", "offer", "rejected", "withdrawn", "closed", "no_response"}),
     "screening": frozenset({"interview", "offer", "rejected", "withdrawn", "closed", "no_response"}),
     "interview": frozenset({"interview", "offer", "rejected", "withdrawn", "closed", "no_response"}),
