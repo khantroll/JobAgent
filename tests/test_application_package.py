@@ -83,7 +83,7 @@ def test_package_document_returns_reviewed_text(db_path, tmp_path, monkeypatch):
     match_repo.update_match_documents(cid, jid, str(resume), str(cover))
 
     resume_path, resume_text = packages.package_document(cid, jid, "resume")
-    cover_path, cover_text = packages.package_document(cid, jid, "cover")
+    cover_path, cover_text = packages.package_document(cid, jid, "cover-letter")
     assert resume_path == resume.resolve()
     assert cover_path == cover.resolve()
     assert resume_text == "reviewed resume"
