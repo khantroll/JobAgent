@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from jobagent import AUTO_APPLY_ENABLED, __version__
+from jobagent import application_package as package_service
 from jobagent.db import candidates as cand_repo
 from jobagent.db import init_db
 from jobagent.db import jobs as job_repo
@@ -496,251 +497,63 @@ def update_match_status(
     return RedirectResponse(url(f"/candidates/{cid}/matches?{back}"), status_code=303)
 
 
+@app.get("/candidates/{cid}/matches/{jid}/package")
+def application_package(cid: int, jid: str, request: Request):
+    candidate = cand_repo.get_candidate(cid)
+    if not candidate:
+        raise HTTPException(404)
+    try:
+        package = package_service.get_package(cid, jid)
+    except package_service.PackageError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    return _render(
+        request,
+        "application_package.html",
+        {
+            "candidate": candidate,
+            "match": package["match"],
+            "package": package,
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@app.post("/candidates/{cid}/matches/{jid}/package/generate")
+def generate_application_package(cid: int, jid: str):
+    try:
+        package_service.generate_package(cid, jid)
+    except package_service.PackageError as exc:
+        return RedirectResponse(
+            url(f"/candidates/{cid}/matches/{jid}/package?msg={quote(str(exc))}"),
+            status_code=303,
+        )
+    return RedirectResponse(
+        url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Draft package generated. Review before use.')}"),
+        status_code=303,
+    )
+
+
+@app.post("/candidates/{cid}/matches/{jid}/package")
+def save_application_package(
+    cid: int,
+    jid: str,
+    resume_text: str = Form(...),
+    cover_text: str = Form(...),
+):
+    try:
+        package_service.save_package(
+            cid, jid, resume_text=resume_text, cover_text=cover_text
+        )
+    except package_service.PackageError as exc:
+        return RedirectResponse(
+            url(f"/candidates/{cid}/matches/{jid}/package?msg={quote(str(exc))}"),
+            status_code=303,
+        )
+    return RedirectResponse(
+        url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Reviewed package saved.')}"),
+        status_code=303,
+    )
+
+
 @app.get("/candidates/{cid}")
 def edit_candidate(cid: int, request: Request):
-    cand = cand_repo.get_candidate(cid)
-    if not cand:
-        raise HTTPException(404)
-    return _render(
-        request,
-        "candidate_form.html",
-        _candidate_form_context(cand, msg=request.query_params.get("msg")),
-    )
-
-
-@app.post("/candidates/{cid}/suggest-hej-categories")
-def suggest_hej_categories(cid: int):
-    cand = cand_repo.get_candidate(cid)
-    if not cand:
-        raise HTTPException(404)
-    from jobagent.sources.higheredjobs_catalog import (
-        format_category_ids_text,
-        suggest_category_ids_for_titles,
-    )
-
-    titles = [t["title"] for t in cand.get("titles", [])]
-    ids = suggest_category_ids_for_titles(titles)
-    if not ids:
-        msg = "No HigherEdJobs categories matched those titles."
-        return RedirectResponse(url(f"/candidates/{cid}?msg={quote(msg)}"), status_code=303)
-    cand_repo.update_hej_category_ids(cid, format_category_ids_text(ids))
-    msg = f"Suggested {len(ids)} HigherEdJobs category ID(s) from job titles. Review and Save."
-    return RedirectResponse(url(f"/candidates/{cid}?msg={quote(msg)}"), status_code=303)
-
-
-@app.post("/candidates/{cid}/delete")
-def delete_candidate(cid: int):
-    cand = cand_repo.get_candidate(cid)
-    if not cand:
-        raise HTTPException(404)
-    name = cand["name"]
-    cand_repo.delete_candidate(cid)
-    msg = f"Deleted {name} and all their job matches."
-    return RedirectResponse(url(f"/candidates?msg={quote(msg)}"), status_code=303)
-
-
-def _safe_upload_prefix(name: str) -> str:
-    safe = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in (name or "person"))
-    safe = safe.strip("._-")[:80]
-    return safe or "person"
-
-
-def _form_int(value, default: int = 0) -> int:
-    text = str(value or "").strip()
-    if text == "":
-        return default
-    try:
-        return int(text)
-    except ValueError as exc:
-        raise HTTPException(400, detail=f"Expected a whole number, got: {text}") from exc
-
-
-def parse_employers(names, types, careers, workdays, greenhouses, levers):
-    out = []
-    n = len(names) if names else 0
-    for i in range(n):
-        out.append(
-            {
-                "name": names[i] if i < len(names) else "",
-                "source_type": types[i] if i < len(types) else "workday",
-                "careers_url": careers[i] if i < len(careers) else "",
-                "workday_url": workdays[i] if i < len(workdays) else "",
-                "greenhouse_slug": greenhouses[i] if i < len(greenhouses) else "",
-                "lever_slug": levers[i] if i < len(levers) else "",
-            }
-        )
-    return out
-
-
-@app.post("/candidates/save")
-async def save_candidate(
-    request: Request,
-    candidate_id: Optional[int] = Form(None),
-    name: str = Form(...),
-    email: str = Form(""),
-    phone: str = Form(""),
-    location: str = Form(""),
-    linkedin: str = Form(""),
-    github: str = Form(""),
-    resume_text: str = Form(""),
-    titles_text: str = Form(""),
-    employer_name: list[str] = Form([]),
-    employer_source: list[str] = Form([]),
-    careers_url: list[str] = Form([]),
-    workday_url: list[str] = Form([]),
-    greenhouse_slug: list[str] = Form([]),
-    lever_slug: list[str] = Form([]),
-    min_score: str = Form("65"),
-    salary_min: str = Form("0"),
-    salary_max: str = Form("0"),
-    keywords: str = Form(""),
-    hej_category_ids: str = Form(""),
-    commute_auto_apply_minutes: str = Form("30"),
-    commute_review_minutes: str = Form("90"),
-    search_enabled: list[str] = Form([]),
-    resume_file: UploadFile | None = File(None),
-):
-    init_db()
-    saved_file = ""
-    upload_root = uploads_dir()
-    if resume_file and resume_file.filename:
-        safe_name = "".join(
-            ch for ch in resume_file.filename if ch.isalnum() or ch in "-_."
-        ).strip()[:120]
-        target = upload_root / f"{_safe_upload_prefix(name)}_{safe_name}"
-        content = await resume_file.read()
-        target.write_bytes(content)
-        saved_file = str(target)
-        if not resume_text.strip() and safe_name.lower().endswith((".txt", ".md")):
-            resume_text = content.decode("utf-8", errors="replace")
-    elif candidate_id:
-        old = cand_repo.get_candidate(candidate_id)
-        saved_file = old.get("resume_file", "") if old else ""
-
-    titles = titles_text.replace("\r", "").split("\n")
-    employers = parse_employers(
-        employer_name,
-        employer_source,
-        careers_url,
-        workday_url,
-        greenhouse_slug,
-        lever_slug,
-    )
-    cid = cand_repo.save_candidate(
-        {
-            "name": name,
-            "email": email,
-            "phone": phone,
-            "location": location,
-            "linkedin": linkedin,
-            "github": github,
-            "resume_text": resume_text,
-            "resume_file": saved_file,
-            "min_match_score": _form_int(min_score, 65),
-            "salary_min": _form_int(salary_min, 0),
-            "salary_max": _form_int(salary_max, 0),
-            "keywords_text": keywords.replace("\r", ""),
-            "hej_category_ids": hej_category_ids.replace("\r", ""),
-            "commute_auto_apply_minutes": _form_int(commute_auto_apply_minutes, 30),
-            "commute_review_minutes": _form_int(commute_review_minutes, 90),
-            "search_enabled": 1 if "1" in search_enabled else 0,
-        },
-        titles,
-        employers,
-        candidate_id,
-    )
-    return RedirectResponse(url(f"/candidates/{cid}"), status_code=303)
-
-
-@app.get("/jobs")
-def jobs_page(
-    request: Request,
-    q: str = "",
-    source: str = "",
-    candidate_id: str = "",
-    status: str = "",
-    min_score: str = "",
-    sort_by: str = "found_at",
-    sort_dir: str = "desc",
-):
-    init_db()
-    people = cand_repo.list_candidates()
-    cid = int(candidate_id) if str(candidate_id).strip().isdigit() else None
-    selected = cand_repo.get_candidate(cid) if cid else None
-    min_score_val = int(min_score) if str(min_score or "").strip() else None
-    if selected:
-        if sort_by not in match_repo.MATCH_SORT_FIELDS:
-            sort_by = "found_at"
-        rows, total = match_repo.list_matches(
-            selected["id"],
-            status=status or None,
-            q=q or None,
-            min_score=min_score_val,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-            limit=100,
-        )
-        match_repo.annotate_match_duplicates(rows)
-        sort_fields = sorted(match_repo.MATCH_SORT_FIELDS)
-    else:
-        if sort_by not in job_repo.JOB_SORT_FIELDS:
-            sort_by = "found_at"
-        rows, total = job_repo.list_jobs(
-            source=source or None,
-            q=q or None,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-            limit=100,
-        )
-        sort_fields = sorted(job_repo.JOB_SORT_FIELDS)
-    return _render(
-        request,
-        "jobs.html",
-        {
-            "jobs": rows,
-            "total": total,
-            "q": q,
-            "source": source,
-            "sources": job_repo.list_sources(),
-            "status": status,
-            "min_score": min_score,
-            "sort_by": sort_by,
-            "sort_dir": sort_dir,
-            "sort_fields": sort_fields,
-            "people": people,
-            "selected": selected,
-            "candidate_id": cid or "",
-            "statuses": sorted(match_repo.MATCH_STATUSES),
-        },
-    )
-
-
-@app.post("/run")
-def run_now(candidate_id: Optional[int] = Form(None)):
-    try:
-        worker.start_run(candidate_id=candidate_id)
-    except RuntimeError as e:
-        return RedirectResponse(url(f"/?run_error={quote(str(e))}"), status_code=303)
-    return RedirectResponse(url("/"), status_code=303)
-
-
-@app.get("/runs")
-def runs_page(request: Request):
-    return _render(
-        request,
-        "runs.html",
-        {
-            "history": run_repo.list_run_history(50),
-            "runs": worker.list_runs(50),
-        },
-    )
-
-
-@app.get("/health")
-def health():
-    return {
-        "ok": True,
-        "version": __version__,
-        "ui": "simple",
-        "auto_apply_enabled": AUTO_APPLY_ENABLED,
-    }
