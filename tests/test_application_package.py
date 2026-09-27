@@ -69,3 +69,36 @@ def test_package_rejects_cross_candidate_document_path(db_path, tmp_path, monkey
     match_repo.update_match_documents(cid, jid, str(alien), str(alien))
     with pytest.raises(packages.PackageError, match="outside"):
         packages.get_package(cid, jid)
+
+
+def test_package_document_returns_reviewed_text(db_path, tmp_path, monkeypatch):
+    cid, jid = _fixture_match()
+    monkeypatch.setenv("JOBAGENT_OUTPUT_DIR", str(tmp_path / "output"))
+    resume = packages.output_dir() / "resumes" / str(cid) / "resume.txt"
+    cover = packages.output_dir() / "cover_letters" / str(cid) / "cover.txt"
+    resume.parent.mkdir(parents=True, exist_ok=True)
+    cover.parent.mkdir(parents=True, exist_ok=True)
+    resume.write_text("reviewed resume", encoding="utf-8")
+    cover.write_text("reviewed cover", encoding="utf-8")
+    match_repo.update_match_documents(cid, jid, str(resume), str(cover))
+
+    resume_path, resume_text = packages.package_document(cid, jid, "resume")
+    cover_path, cover_text = packages.package_document(cid, jid, "cover-letter")
+    assert resume_path == resume.resolve()
+    assert cover_path == cover.resolve()
+    assert resume_text == "reviewed resume"
+    assert cover_text == "reviewed cover"
+
+
+def test_package_document_rejects_unknown_kind(db_path, tmp_path, monkeypatch):
+    cid, jid = _fixture_match()
+    monkeypatch.setenv("JOBAGENT_OUTPUT_DIR", str(tmp_path / "output"))
+    resume = packages.output_dir() / "resumes" / str(cid) / "resume.txt"
+    cover = packages.output_dir() / "cover_letters" / str(cid) / "cover.txt"
+    resume.parent.mkdir(parents=True, exist_ok=True)
+    cover.parent.mkdir(parents=True, exist_ok=True)
+    resume.write_text("resume", encoding="utf-8")
+    cover.write_text("cover", encoding="utf-8")
+    match_repo.update_match_documents(cid, jid, str(resume), str(cover))
+    with pytest.raises(packages.PackageError, match="Unknown"):
+        packages.package_document(cid, jid, "other")

@@ -533,6 +533,23 @@ def generate_application_package(cid: int, jid: str):
     )
 
 
+@app.get("/candidates/{cid}/matches/{jid}/package/{kind}.txt")
+def download_application_package_document(cid: int, jid: str, kind: str):
+    try:
+        _, content = package_service.package_document(cid, jid, kind)
+        package = package_service.get_package(cid, jid)
+    except package_service.PackageError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    label = "resume" if kind == "resume" else "cover-letter"
+    company = "".join(ch if ch.isalnum() else "-" for ch in (package["match"].get("company") or "job")).strip("-")[:40]
+    filename = f"{company}-{label}.txt" if company else f"{label}.txt"
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.post("/candidates/{cid}/matches/{jid}/package")
 def save_application_package(
     cid: int,
