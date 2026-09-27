@@ -6,6 +6,8 @@ Nothing here submits an application.
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime, timezone
+import shutil
 
 from jobagent.config import candidate_runtime_config, load_settings
 from jobagent.db import candidates as cand_repo
@@ -84,3 +86,19 @@ def save_package(candidate_id: int, job_id: str, *, resume_text: str, cover_text
     resume.write_text(resume_text, encoding="utf-8")
     cover.write_text(cover_text, encoding="utf-8")
     return get_package(candidate_id, job_id)
+
+def snapshot_submitted_package(candidate_id: int, job_id: str) -> dict:
+    package = get_package(candidate_id, job_id)
+    if not package["generated"]:
+        raise PackageError("Generate and review the package before recording a submitted snapshot.")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    root = output_dir().resolve() / "submitted" / str(candidate_id) / job_id
+    root.mkdir(parents=True, exist_ok=True)
+    resume_src = _safe_package_path(package["match"]["resume_path"], candidate_id=candidate_id)
+    cover_src = _safe_package_path(package["match"]["cover_path"], candidate_id=candidate_id)
+    resume_dst = root / f"{stamp}-resume.txt"
+    cover_dst = root / f"{stamp}-cover-letter.txt"
+    shutil.copyfile(resume_src, resume_dst)
+    shutil.copyfile(cover_src, cover_dst)
+    match_repo.update_submitted_documents(candidate_id, job_id, str(resume_dst), str(cover_dst))
+    return {"resume_path": str(resume_dst), "cover_path": str(cover_dst)}
