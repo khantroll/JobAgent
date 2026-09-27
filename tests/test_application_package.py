@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from jobagent import application_package as packages
+from jobagent.db import candidates as cand_repo
+from jobagent.db import jobs as job_repo
+from jobagent.db import matches as match_repo
+
+
+def _fixture_match():
+    cid = cand_repo.save_candidate(
+        {"name": "Candidate", "resume_text": "Real experience", "search_enabled": 1},
+        ["Systems Administrator"],
+        [],
+    )
+    job_repo.upsert_job(
+        {"title": "Systems Administrator", "company": "Example", "url": "https://example.test/job",
+         "description": "Infrastructure role", "source": "test"}
+    )
+    jid = job_repo.list_job_ids()[0]
+    match_repo.link_job_to_candidate(jid, cid)
+    return cid, jid
+
+
+def test_generate_and_edit_package_is_candidate_scoped(db_path, tmp_path, monkeypatch):
+    cid, jid = _fixture_match()
+    monkeypatch.setenv("JOBAGENT_OUTPUT_DIR", str(tmp_path / "output"))
+
+    def fake_generate(job, config, *, candidate_id):
+        base = packages.output_dir()
+        resume = base / "resumes" / str(candidate_id) / f"{jid}.txt"
+        cover = base / "cover_letters" / str(candidate_id) / f"{jid}.txt"
+        resume.parent.mkdir(parents=True, exist_ok=True)
+        cover.parent.mkdir(parents=True, exist_ok=True)
+        resume.write_text("draft resume", encoding="utf-8")
+        cover.write_text("draft cover", encoding="utf-8")
+        return str(resume), str(cover)
+
+    monkeypatch.setattr(packages, "generate_docs", fake_generate)
+    result = packages.generate_package(cid, jid)
+    assert result["generated"]
+    assert result["resume_text"] == "draft resume"
+    saved = packages.save_package(cid, jid, resume_text="reviewed resume", cover_text="reviewed cover")
+    assert saved["resume_text"] == "reviewed resume"
+    assert saved["cover_text"] == "reviewed cover"
+
+
+def test_rejected_match_requires_approval_before_generation(db_path, monkeypatch):
+    cid, jid = _fixture_match()
+    match_repo.update_match_status(cid, jid, "rejected")
+    with pytest.raises(packages.PackageError, match="Approve"):
+        packages.generate_package(cid, jid)
