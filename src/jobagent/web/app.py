@@ -504,6 +504,33 @@ def update_match_status(
     return RedirectResponse(url(f"/candidates/{cid}/matches?{back}"), status_code=303)
 
 
+@app.post("/candidates/{cid}/matches/{jid}/application")
+def update_application_ledger(
+    cid: int,
+    jid: str,
+    stage: str = Form(...),
+    applied_at: str = Form(""),
+    channel: str = Form(""),
+    follow_up_at: str = Form(""),
+    notes: str = Form(""),
+):
+    if not cand_repo.get_candidate(cid):
+        raise HTTPException(404)
+    try:
+        ok = match_repo.update_application_tracking(
+            cid, jid, stage=stage, applied_at=applied_at, channel=channel,
+            follow_up_at=follow_up_at, notes=notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(404)
+    return RedirectResponse(
+        url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Application tracking updated.')}"),
+        status_code=303,
+    )
+
+
 @app.get("/candidates/{cid}/matches/{jid}/package")
 def application_package(cid: int, jid: str, request: Request):
     candidate = cand_repo.get_candidate(cid)
@@ -521,6 +548,7 @@ def application_package(cid: int, jid: str, request: Request):
             "match": package["match"],
             "package": package,
             "msg": request.query_params.get("msg"),
+            "application_stages": ["not_applied", "applied", "screening", "interview", "offer", "rejected", "withdrawn"],
         },
     )
 
