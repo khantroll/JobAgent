@@ -64,7 +64,7 @@ def test_repeated_init_db_does_not_reapply_001_or_alter_data(db_path):
     finally:
         conn.close()
     assert len(before_migrations) == 4
-    assert [row[0] for row in before_migrations] == ["001_initial", "002_ranking_and_search", "003_application_tracking"]
+    assert [row[0] for row in before_migrations] == ["001_initial", "002_ranking_and_search", "003_application_tracking", "004_application_crm"]
 
     assert apply_migrations(db_path) == []
     from jobagent.db import init_db
