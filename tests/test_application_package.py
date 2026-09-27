@@ -22,6 +22,7 @@ def _fixture_match():
     )
     jid = job_repo.list_job_ids()[0]
     match_repo.link_job_to_candidate(jid, cid)
+    match_repo.update_match_status(cid, jid, "reviewed")
     return cid, jid
 
 
