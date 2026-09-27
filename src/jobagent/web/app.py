@@ -18,6 +18,7 @@ from jobagent.db import candidates as cand_repo
 from jobagent.db import init_db
 from jobagent.db import jobs as job_repo
 from jobagent.db import matches as match_repo
+from jobagent.db import applications as application_repo
 from jobagent.db import runs as run_repo
 from jobagent.paths import uploads_dir
 from jobagent.web import worker
@@ -513,13 +514,14 @@ def update_application_ledger(
     channel: str = Form(""),
     follow_up_at: str = Form(""),
     notes: str = Form(""),
+    next_action: str = Form(""),
 ):
     if not cand_repo.get_candidate(cid):
         raise HTTPException(404)
     try:
         ok = match_repo.update_application_tracking(
             cid, jid, stage=stage, applied_at=applied_at, channel=channel,
-            follow_up_at=follow_up_at, notes=notes,
+            follow_up_at=follow_up_at, notes=notes, next_action=next_action,
         )
     except ValueError as exc:
         raise HTTPException(400, detail=str(exc)) from exc
@@ -529,6 +531,36 @@ def update_application_ledger(
         url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Application tracking updated.')}"),
         status_code=303,
     )
+
+
+@app.post("/candidates/{cid}/matches/{jid}/contacts")
+def add_application_contact(
+    cid: int, jid: str, name: str = Form(...), role: str = Form(""),
+    email: str = Form(""), phone: str = Form(""), linkedin: str = Form(""), notes: str = Form(""),
+):
+    if not match_repo.get_match(cid, jid):
+        raise HTTPException(404)
+    try:
+        application_repo.add_contact(cid, jid, name=name, role=role, email=email, phone=phone, linkedin=linkedin, notes=notes)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
+    return RedirectResponse(url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Contact added.')}"), status_code=303)
+
+
+@app.post("/candidates/{cid}/matches/{jid}/contacts/{contact_id}/delete")
+def delete_application_contact(cid: int, jid: str, contact_id: int):
+    if not application_repo.delete_contact(cid, jid, contact_id):
+        raise HTTPException(404)
+    return RedirectResponse(url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Contact removed.')}"), status_code=303)
+
+
+@app.post("/candidates/{cid}/matches/{jid}/package/snapshot")
+def snapshot_application_package(cid: int, jid: str):
+    try:
+        package_service.snapshot_submitted_package(cid, jid)
+    except package_service.PackageError as exc:
+        return RedirectResponse(url(f"/candidates/{cid}/matches/{jid}/package?msg={quote(str(exc))}"), status_code=303)
+    return RedirectResponse(url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Submitted package snapshot preserved.')}"), status_code=303)
 
 
 @app.get("/candidates/{cid}/matches/{jid}/package")
@@ -548,7 +580,9 @@ def application_package(cid: int, jid: str, request: Request):
             "match": package["match"],
             "package": package,
             "msg": request.query_params.get("msg"),
-            "application_stages": ["not_applied", "applied", "screening", "interview", "offer", "rejected", "withdrawn"],
+            "application_stages": ["not_applied", "applied", "screening", "interview", "offer", "accepted", "rejected", "withdrawn", "declined_offer", "closed", "no_response"],
+            "application_events": application_repo.list_events(cid, jid),
+            "application_contacts": application_repo.list_contacts(cid, jid),
         },
     )
 
