@@ -35,7 +35,7 @@ def test_migrations_are_deterministic_and_idempotent(db_path):
     conn = connect(db_path)
     try:
         applied = [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")]
-        assert applied == ["001_initial", "002_ranking_and_search", "003_application_tracking"]
+        assert applied == ["001_initial", "002_ranking_and_search", "003_application_tracking", "004_application_crm"]
     finally:
         conn.close()
 
