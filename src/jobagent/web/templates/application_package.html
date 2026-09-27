@@ -14,6 +14,32 @@
   <div><strong>Application</strong><br>{{ match.application_state or "none" }}</div>
 </section>
 <section class="panel">
+  <h2>Application tracking</h2>
+  <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/application">
+    <div class="grid">
+      <label>Stage
+        <select name="stage">
+          {% for stage in application_stages %}<option value="{{ stage }}" {% if (match.application_stage or 'not_applied')==stage %}selected{% endif %}>{{ stage|replace('_', ' ')|title }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Applied date/time
+        <input type="datetime-local" name="applied_at" value="{{ (match.applied_at or '')[:16] }}">
+      </label>
+      <label>Channel
+        <input name="channel" value="{{ match.application_channel or '' }}" placeholder="Company site, LinkedIn, recruiter…">
+      </label>
+      <label>Follow up
+        <input type="datetime-local" name="follow_up_at" value="{{ (match.follow_up_at or '')[:16] }}">
+      </label>
+    </div>
+    <label>Notes
+      <textarea name="notes" rows="4" placeholder="Contact, interview details, next action, outcome…">{{ match.application_notes or '' }}</textarea>
+    </label>
+    {% if match.outcome_at %}<p class="muted">Outcome recorded {{ match.outcome_at|format_date }}</p>{% endif %}
+    <button class="primary" type="submit">Save application tracking</button>
+  </form>
+</section>
+<section class="panel">
   <p><strong>Human review required.</strong> JobAgent drafts and saves this candidate/job-specific package. It does not submit applications.</p>
   {% if not package.generated %}
   <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/generate">

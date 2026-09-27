@@ -12,6 +12,7 @@ from jobagent.db.connection import get_conn, row_to_dict
 MATCH_STATUSES = frozenset({"new", "reviewed", "applied", "rejected", "ignored"})
 REVIEW_STATUSES = frozenset({"pending", "needs_review", "skipped", "cleared"})
 APPLICATION_STATES = frozenset({"none", "recorded", "failed"})
+APPLICATION_STAGES = frozenset({"not_applied", "applied", "screening", "interview", "offer", "rejected", "withdrawn"})
 COMMUTE_RESULTS = frozenset({"auto_apply", "needs_review", "skip"})
 MATCH_SORT_FIELDS = frozenset(
     {
@@ -387,6 +388,46 @@ def update_match_status(
         return cur.rowcount > 0
 
 
+
+def update_application_tracking(
+    candidate_id: int,
+    job_id: str,
+    *,
+    stage: str,
+    applied_at: str | None = None,
+    channel: str = "",
+    follow_up_at: str | None = None,
+    notes: str = "",
+) -> bool:
+    if stage not in APPLICATION_STAGES:
+        raise ValueError(f"stage must be one of {sorted(APPLICATION_STAGES)}")
+    now = _utcnow()
+    applied = (applied_at or "").strip() or None
+    follow_up = (follow_up_at or "").strip() or None
+    if stage != "not_applied" and not applied:
+        current = get_match(candidate_id, job_id)
+        applied = (current or {}).get("applied_at") or now
+    terminal = stage in {"offer", "rejected", "withdrawn"}
+    status = "applied" if stage not in {"not_applied", "rejected"} else ("rejected" if stage == "rejected" else None)
+    application_state = "recorded" if stage != "not_applied" else "none"
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            UPDATE candidate_job_matches
+            SET application_stage=?, application_channel=?, application_notes=?,
+                follow_up_at=?, outcome_at=?, applied_at=?, application_state=?,
+                status=COALESCE(?, status), status_updated_at=?, updated_at=?
+            WHERE candidate_id=? AND job_id=?
+            """,
+            (
+                stage, channel.strip(), notes.strip(), follow_up,
+                now if terminal else None, applied, application_state, status,
+                now, now, candidate_id, job_id,
+            ),
+        )
+        return cur.rowcount > 0
+
+
 def update_match_documents(candidate_id: int, job_id: str, resume_path: str, cover_path: str) -> None:
     now = _utcnow()
     with get_conn() as conn:
@@ -589,11 +630,33 @@ def dashboard_stats(candidate_id: int | None = None) -> dict:
                 """,
                 (candidate_id,),
             ).fetchone()[0]
+            by_application_stage = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    """
+                    SELECT application_stage, COUNT(*) FROM candidate_job_matches
+                    WHERE candidate_id=? AND application_stage!='not_applied'
+                    GROUP BY application_stage
+                    """,
+                    (candidate_id,),
+                ).fetchall()
+            }
+            follow_up_due = conn.execute(
+                """
+                SELECT COUNT(*) FROM candidate_job_matches
+                WHERE candidate_id=? AND follow_up_at IS NOT NULL AND follow_up_at!=''
+                  AND follow_up_at <= ?
+                  AND application_stage NOT IN ('offer', 'rejected', 'withdrawn')
+                """,
+                (candidate_id, _utcnow()),
+            ).fetchone()[0]
             return {
                 "by_status": by_status,
                 "unscored": unscored,
                 "package_needed": package_needed,
                 "package_ready": package_ready,
+                "by_application_stage": by_application_stage,
+                "follow_up_due": follow_up_due,
                 "total": sum(by_status.values()),
                 "catalog_jobs": total_jobs,
             }
@@ -687,6 +750,11 @@ def export_matches_csv(candidate_id: int, **kwargs) -> str:
         "posted_at",
         "applied_at",
         "application_state",
+        "application_stage",
+        "application_channel",
+        "application_notes",
+        "follow_up_at",
+        "outcome_at",
         "salary_raw",
         "job_id",
     ]

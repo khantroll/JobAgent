@@ -1,9 +1,12 @@
 <tr id="job-{{ m.job_id }}"{% if m.is_duplicate %} class="dup-row"{% endif %}>
   <td>
     <strong>{{ m.status }}</strong>
-    {% if m.application_state and m.application_state != 'none' %}
+    {% if m.application_stage and m.application_stage != 'not_applied' %}
+    <div class="package-state ready">{{ m.application_stage|replace('_', ' ') }}</div>
+    {% elif m.application_state and m.application_state != 'none' %}
     <div class="muted">application: {{ m.application_state }}</div>
     {% endif %}
+    {% if m.follow_up_at %}<div class="muted">follow up {{ m.follow_up_at|format_date }}</div>{% endif %}
     {% if m.status_reason %}<div class="muted">{{ m.status_reason }}</div>{% endif %}
   </td>
   <td>
