@@ -64,6 +64,17 @@ def get_package(candidate_id: int, job_id: str) -> dict:
     return out
 
 
+def package_document(candidate_id: int, job_id: str, kind: str) -> tuple[Path, str]:
+    package = get_package(candidate_id, job_id)
+    if not package["generated"]:
+        raise PackageError("Application package has not been generated.")
+    if kind == "resume":
+        return _safe_package_path(package["match"]["resume_path"], candidate_id=candidate_id), package["resume_text"]
+    if kind == "cover":
+        return _safe_package_path(package["match"]["cover_path"], candidate_id=candidate_id), package["cover_text"]
+    raise PackageError("Unknown package document.")
+
+
 def save_package(candidate_id: int, job_id: str, *, resume_text: str, cover_text: str) -> dict:
     match = match_repo.get_match(candidate_id, job_id)
     if not match:
