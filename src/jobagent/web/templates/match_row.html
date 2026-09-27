@@ -37,6 +37,7 @@
     {% if m.applied_at %}<br>Recorded {{ m.applied_at|format_date }}{% endif %}
   </td>
   <td>
+    {% if m.status not in ["ignored", "rejected"] %}<a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches/{{ m.job_id }}/package">{% if m.resume_path and m.cover_path %}Review package{% else %}Build package{% endif %}</a>{% endif %}
     <form method="post"
           action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ m.job_id }}/status?{{ filter_q }}"
           class="match-status-form"
