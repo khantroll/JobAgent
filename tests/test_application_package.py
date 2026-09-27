@@ -102,3 +102,20 @@ def test_package_document_rejects_unknown_kind(db_path, tmp_path, monkeypatch):
     match_repo.update_match_documents(cid, jid, str(resume), str(cover))
     with pytest.raises(packages.PackageError, match="Unknown"):
         packages.package_document(cid, jid, "other")
+
+
+def test_submitted_package_snapshot_is_immutable_copy(db_path, tmp_path, monkeypatch):
+    cid, jid = _fixture_match()
+    monkeypatch.setenv("JOBAGENT_OUTPUT_DIR", str(tmp_path / "output"))
+    resume = packages.output_dir() / "resumes" / str(cid) / "resume.txt"
+    cover = packages.output_dir() / "cover_letters" / str(cid) / "cover.txt"
+    resume.parent.mkdir(parents=True, exist_ok=True)
+    cover.parent.mkdir(parents=True, exist_ok=True)
+    resume.write_text("submitted resume", encoding="utf-8")
+    cover.write_text("submitted cover", encoding="utf-8")
+    match_repo.update_match_documents(cid, jid, str(resume), str(cover))
+    snapshot = packages.snapshot_submitted_package(cid, jid)
+    resume.write_text("later edit", encoding="utf-8")
+    assert Path(snapshot["resume_path"]).read_text(encoding="utf-8") == "submitted resume"
+    row = match_repo.get_match(cid, jid)
+    assert row["submitted_resume_path"] == snapshot["resume_path"]

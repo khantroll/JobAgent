@@ -30,12 +30,12 @@ JOB_FORBIDDEN_COLUMNS = {
 
 def test_migrations_are_deterministic_and_idempotent(db_path):
     versions = [p.stem for p in available_migrations()]
-    assert versions == ["001_initial", "002_ranking_and_search", "003_application_tracking"]
+    assert versions == ["001_initial", "002_ranking_and_search", "003_application_tracking", "004_application_crm"]
     assert apply_migrations(db_path) == []
     conn = connect(db_path)
     try:
         applied = [row[0] for row in conn.execute("SELECT version FROM schema_migrations ORDER BY version")]
-        assert applied == ["001_initial", "002_ranking_and_search", "003_application_tracking"]
+        assert applied == ["001_initial", "002_ranking_and_search", "003_application_tracking", "004_application_crm"]
     finally:
         conn.close()
 
@@ -63,8 +63,8 @@ def test_repeated_init_db_does_not_reapply_001_or_alter_data(db_path):
         ).fetchall()
     finally:
         conn.close()
-    assert len(before_migrations) == 3
-    assert [row[0] for row in before_migrations] == ["001_initial", "002_ranking_and_search", "003_application_tracking"]
+    assert len(before_migrations) == 4
+    assert [row[0] for row in before_migrations] == ["001_initial", "002_ranking_and_search", "003_application_tracking", "004_application_crm"]
 
     assert apply_migrations(db_path) == []
     from jobagent.db import init_db

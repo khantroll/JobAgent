@@ -32,12 +32,43 @@
         <input type="datetime-local" name="follow_up_at" value="{{ (match.follow_up_at or '')[:16] }}">
       </label>
     </div>
+    <label>Next action
+      <input name="next_action" value="{{ match.next_action or '' }}" placeholder="Follow up, prepare for interview, send thank-you…">
+    </label>
     <label>Notes
-      <textarea name="notes" rows="4" placeholder="Contact, interview details, next action, outcome…">{{ match.application_notes or '' }}</textarea>
+      <textarea name="notes" rows="4" placeholder="Interview details, context, outcome…">{{ match.application_notes or '' }}</textarea>
     </label>
     {% if match.outcome_at %}<p class="muted">Outcome recorded {{ match.outcome_at|format_date }}</p>{% endif %}
     <button class="primary" type="submit">Save application tracking</button>
   </form>
+</section>
+<section class="panel">
+  <h2>Contacts</h2>
+  {% for contact in application_contacts %}
+  <div class="crm-item"><strong>{{ contact.name }}</strong>{% if contact.role %} — {{ contact.role }}{% endif %}
+    <div class="muted">{{ contact.email }}{% if contact.phone %} · {{ contact.phone }}{% endif %}{% if contact.linkedin %} · {{ contact.linkedin }}{% endif %}</div>
+    {% if contact.notes %}<div>{{ contact.notes }}</div>{% endif %}
+    <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/contacts/{{ contact.id }}/delete"><button type="submit">Remove</button></form>
+  </div>
+  {% else %}<p class="muted">No recruiter or hiring contacts recorded.</p>{% endfor %}
+  <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/contacts">
+    <div class="grid">
+      <label>Name <input name="name" required></label><label>Role <input name="role"></label>
+      <label>Email <input name="email" type="email"></label><label>Phone <input name="phone"></label>
+      <label>LinkedIn <input name="linkedin"></label>
+    </div>
+    <label>Notes <input name="notes"></label>
+    <button type="submit">Add contact</button>
+  </form>
+</section>
+<section class="panel">
+  <h2>Application history</h2>
+  {% for event in application_events %}
+  <div class="crm-item"><strong>{{ event.event_type|replace('_',' ')|title }}</strong> · {{ event.occurred_at|format_date }}
+    {% if event.from_stage or event.to_stage %}<div>{{ event.from_stage|replace('_',' ') }} → {{ event.to_stage|replace('_',' ') }}</div>{% endif %}
+    {% if event.note %}<div class="muted">{{ event.note }}</div>{% endif %}
+  </div>
+  {% else %}<p class="muted">No application events yet.</p>{% endfor %}
 </section>
 <section class="panel">
   <p><strong>Human review required.</strong> JobAgent drafts and saves this candidate/job-specific package. It does not submit applications.</p>
@@ -49,7 +80,9 @@
   <div class="package-actions">
     <a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/resume.txt">Download resume</a>
     <a class="button" href="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/cover-letter.txt">Download cover letter</a>
+    <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package/snapshot"><button type="submit">Preserve submitted snapshot</button></form>
   </div>
+  {% if match.submitted_resume_path and match.submitted_cover_path %}<p class="muted">A submitted package snapshot is preserved for this application.</p>{% endif %}
   <form method="post" action="{{ base }}/candidates/{{ candidate.id }}/matches/{{ match.job_id }}/package">
     <label>Tailored resume
       <textarea name="resume_text" rows="24">{{ package.resume_text }}</textarea>

@@ -44,6 +44,19 @@
       <option value="ready" {% if package_state=='ready' %}selected{% endif %}>Ready</option>
     </select>
   </label>
+  <label>Application
+    <select name="application_stage">
+      <option value="">Any stage</option>
+      {% for a in application_stages %}<option value="{{ a }}" {% if application_stage==a %}selected{% endif %}>{{ a|replace('_',' ')|title }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Follow-up
+    <select name="follow_up">
+      <option value="">Any</option>
+      <option value="due" {% if follow_up=='due' %}selected{% endif %}>Due</option>
+      <option value="upcoming" {% if follow_up=='upcoming' %}selected{% endif %}>Upcoming</option>
+    </select>
+  </label>
   <label>Search <input name="q" value="{{ q }}" placeholder="Title / company / location / explanation"></label>
   <label>Min score <input type="number" name="min_score" value="{{ min_score }}"></label>
   <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
