@@ -6,7 +6,7 @@ Alpha.3 closes the gap between a good candidate/job match and a human-reviewed a
 
 1. Discovery, ranking, and commute evaluation remain Alpha.2 behavior.
 2. A person reviews a candidate-specific match.
-3. For a match that is not ignored/rejected, **Build package** generates a tailored resume and cover-letter draft.
+3. After the operator explicitly sets a match to `reviewed`, **Build package** generates a tailored resume and cover-letter draft.
 4. Drafts are stored under `output/resumes/{candidate_id}/` and `output/cover_letters/{candidate_id}/`.
 5. The operator reviews and edits both drafts in the local UI and saves them.
 6. The match stores only its candidate-specific document paths.
