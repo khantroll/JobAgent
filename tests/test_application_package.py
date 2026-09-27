@@ -52,5 +52,20 @@ def test_generate_and_edit_package_is_candidate_scoped(db_path, tmp_path, monkey
 def test_rejected_match_requires_approval_before_generation(db_path, monkeypatch):
     cid, jid = _fixture_match()
     match_repo.update_match_status(cid, jid, "rejected")
-    with pytest.raises(packages.PackageError, match="Approve"):
+    with pytest.raises(packages.PackageError, match="reviewed"):
         packages.generate_package(cid, jid)
+
+def test_package_rejects_cross_candidate_document_path(db_path, tmp_path, monkeypatch):
+    cid, jid = _fixture_match()
+    other = cand_repo.save_candidate(
+        {"name": "Other", "resume_text": "Other experience", "search_enabled": 1},
+        ["Engineer"],
+        [],
+    )
+    monkeypatch.setenv("JOBAGENT_OUTPUT_DIR", str(tmp_path / "output"))
+    alien = packages.output_dir() / "resumes" / str(other) / "alien.txt"
+    alien.parent.mkdir(parents=True, exist_ok=True)
+    alien.write_text("not yours", encoding="utf-8")
+    match_repo.update_match_documents(cid, jid, str(alien), str(alien))
+    with pytest.raises(packages.PackageError, match="outside"):
+        packages.get_package(cid, jid)
