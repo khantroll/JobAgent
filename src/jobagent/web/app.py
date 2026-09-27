@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from jobagent import AUTO_APPLY_ENABLED, __version__
+from jobagent import application_package as package_service
 from jobagent.db import candidates as cand_repo
 from jobagent.db import init_db
 from jobagent.db import jobs as job_repo
@@ -494,6 +495,64 @@ def update_match_status(
         )
     back = _match_query_from_request(request.query_params)
     return RedirectResponse(url(f"/candidates/{cid}/matches?{back}"), status_code=303)
+
+
+@app.get("/candidates/{cid}/matches/{jid}/package")
+def application_package(cid: int, jid: str, request: Request):
+    candidate = cand_repo.get_candidate(cid)
+    if not candidate:
+        raise HTTPException(404)
+    try:
+        package = package_service.get_package(cid, jid)
+    except package_service.PackageError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    return _render(
+        request,
+        "application_package.html",
+        {
+            "candidate": candidate,
+            "match": package["match"],
+            "package": package,
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@app.post("/candidates/{cid}/matches/{jid}/package/generate")
+def generate_application_package(cid: int, jid: str):
+    try:
+        package_service.generate_package(cid, jid)
+    except package_service.PackageError as exc:
+        return RedirectResponse(
+            url(f"/candidates/{cid}/matches/{jid}/package?msg={quote(str(exc))}"),
+            status_code=303,
+        )
+    return RedirectResponse(
+        url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Draft package generated. Review before use.')}"),
+        status_code=303,
+    )
+
+
+@app.post("/candidates/{cid}/matches/{jid}/package")
+def save_application_package(
+    cid: int,
+    jid: str,
+    resume_text: str = Form(...),
+    cover_text: str = Form(...),
+):
+    try:
+        package_service.save_package(
+            cid, jid, resume_text=resume_text, cover_text=cover_text
+        )
+    except package_service.PackageError as exc:
+        return RedirectResponse(
+            url(f"/candidates/{cid}/matches/{jid}/package?msg={quote(str(exc))}"),
+            status_code=303,
+        )
+    return RedirectResponse(
+        url(f"/candidates/{cid}/matches/{jid}/package?msg={quote('Reviewed package saved.')}"),
+        status_code=303,
+    )
 
 
 @app.get("/candidates/{cid}")
