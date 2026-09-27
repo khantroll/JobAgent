@@ -1,4 +1,4 @@
-# JobAgent 2.0.0-alpha.2
+# JobAgent 2.0.0-alpha.3
 
 Shared job catalog with **per-candidate matches**. Ranking, commute, review status, generated documents, and application bookkeeping live on the candidate-job match — never on the global job listing.
 
@@ -31,7 +31,7 @@ python -m jobagent.cli serve --host 127.0.0.1 --port 8765
 - UI: http://127.0.0.1:8765/
 - REST: http://127.0.0.1:8765/api/docs
 
-**Do not bind this UI to a public interface.** Alpha.2 is a local tool. The default bind address is `127.0.0.1`. Bearer-token API protection is not enough on its own because the HTML UI also shows candidate data and has state-changing controls.
+**Do not bind this UI to a public interface.** Alpha.3 is a local tool. The default bind address is `127.0.0.1`. Bearer-token API protection is not enough on its own because the HTML UI also shows candidate data and has state-changing controls.
 
 If `JOB_AGENT_API_TOKEN` is unset, both UI and API stay open for local development. If it is set, the UI requires a login cookie and the REST API requires `Authorization: Bearer <token>`. There is no user-account system.
 
@@ -91,7 +91,7 @@ python -m jobagent.cli evaluate --json
 
 Crawl never submits applications. Rank uses Mistral/Anthropic when keys are present, otherwise a deterministic heuristic (or `llm.provider: mock`). Evaluate does not modify the database.
 
-Full recipe: `docs/JOBAGENT_2_ALPHA2.md`. Source status: `docs/SOURCE_STATUS.md`.
+Alpha.3 adds a human-reviewed **application package** step: from an approved match, choose **Build package** to generate candidate/job-specific resume and cover-letter drafts, edit them in the UI, and save the reviewed text. It still never submits an application. Alpha.2 discovery/ranking recipe: `docs/JOBAGENT_2_ALPHA2.md`. Source status: `docs/SOURCE_STATUS.md`.
 
 ## Dry-run cycle
 
