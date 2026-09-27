@@ -569,6 +569,8 @@ def list_matches(
     source: str | None = None,
     work_type: str | None = None,
     package_state: str | None = None,
+    application_stage: str | None = None,
+    follow_up: str | None = None,
     limit: int = 500,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
@@ -616,6 +618,21 @@ def list_matches(
         clauses.append("m.cover_path IS NOT NULL AND m.cover_path!=''")
     elif package_state:
         raise ValueError("package_state must be 'needed' or 'ready'")
+    if application_stage:
+        if application_stage not in APPLICATION_STAGES:
+            raise ValueError("invalid application_stage")
+        clauses.append("m.application_stage = ?")
+        params.append(application_stage)
+    if follow_up == "due":
+        clauses.append("m.follow_up_at IS NOT NULL AND m.follow_up_at != '' AND m.follow_up_at <= ?")
+        clauses.append("m.application_stage NOT IN ('accepted','rejected','withdrawn','declined_offer','closed','no_response')")
+        params.append(_utcnow())
+    elif follow_up == "upcoming":
+        clauses.append("m.follow_up_at IS NOT NULL AND m.follow_up_at != '' AND m.follow_up_at > ?")
+        clauses.append("m.application_stage NOT IN ('accepted','rejected','withdrawn','declined_offer','closed','no_response')")
+        params.append(_utcnow())
+    elif follow_up:
+        raise ValueError("follow_up must be 'due' or 'upcoming'")
     where = " AND ".join(clauses)
     sql = f"{_match_select()} WHERE {where} {_match_order_clause(sort_by, sort_dir)}"
     with get_conn() as conn:
@@ -681,7 +698,7 @@ def dashboard_stats(candidate_id: int | None = None) -> dict:
                 SELECT COUNT(*) FROM candidate_job_matches
                 WHERE candidate_id=? AND follow_up_at IS NOT NULL AND follow_up_at!=''
                   AND follow_up_at <= ?
-                  AND application_stage NOT IN ('offer', 'rejected', 'withdrawn')
+                  AND application_stage NOT IN ('accepted','rejected','withdrawn','declined_offer','closed','no_response')
                 """,
                 (candidate_id, _utcnow()),
             ).fetchone()[0]
