@@ -17,7 +17,7 @@
   <p class="muted">Attach jobs already in the catalog, or run a dry-run cycle (new crawls link to every person).</p>
   {% endif %}
 </section>
-<p class="panel muted"><strong>Auto-apply is disabled</strong> in 2.0.0-alpha.2. You can record a status of <code>applied</code> for bookkeeping; JobAgent will not submit applications.</p>
+<p class="panel muted"><strong>Auto-apply is disabled</strong> in {{ version }}. You can record a status of <code>applied</code> for bookkeeping; JobAgent will not submit applications.</p>
 <form class="panel filters" method="get" action="{{ base }}/candidates/{{ candidate.id }}/matches">
   <label>Status
     <select name="status">
