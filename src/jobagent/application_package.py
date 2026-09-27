@@ -70,7 +70,7 @@ def package_document(candidate_id: int, job_id: str, kind: str) -> tuple[Path, s
         raise PackageError("Application package has not been generated.")
     if kind == "resume":
         return _safe_package_path(package["match"]["resume_path"], candidate_id=candidate_id), package["resume_text"]
-    if kind == "cover":
+    if kind in {"cover", "cover-letter"}:
         return _safe_package_path(package["match"]["cover_path"], candidate_id=candidate_id), package["cover_text"]
     raise PackageError("Unknown package document.")
 
