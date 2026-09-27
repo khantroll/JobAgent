@@ -31,7 +31,7 @@
   {% if selected %}
   <div class="card"><b>{{ stats.total }}</b><span>Matches for {{ selected.name }}</span></div>
   <div class="card"><b>{{ stats.unscored }}</b><span>Unscored</span></div>
-  <a class="card card-link" href="{{ base }}/candidates/{{ selected.id }}/matches?status=reviewed"><b>{{ stats.package_needed }}</b><span>Packages needed</span></a>
+  <a class="card card-link" href="{{ base }}/candidates/{{ selected.id }}/matches?package_state=needed"><b>{{ stats.package_needed }}</b><span>Packages needed</span></a>
   <div class="card"><b>{{ stats.package_ready }}</b><span>Packages ready</span></div>
   {% for status, count in stats['by_status'].items() %}<div class="card"><b>{{ count }}</b><span>{{ status }}</span></div>{% endfor %}
   {% else %}
