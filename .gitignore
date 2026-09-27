@@ -23,6 +23,7 @@ data/*
 !data/.gitkeep
 uploads/
 generated/
+output/
 *.db
 *.db-shm
 *.db-wal
