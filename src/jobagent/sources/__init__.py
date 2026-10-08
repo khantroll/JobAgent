@@ -16,6 +16,9 @@ from . import (
     workday,
 )
 
+logger = logging.getLogger(__name__)
+
+
 def source_skip_reason(name: str, config: dict) -> str | None:
     """Return a human reason if this source will no-op, else None."""
     from jobagent.sources._common import api_credentials, source_cfg, source_enabled
