@@ -41,6 +41,15 @@ def _headers() -> dict:
     }
 
 
+def _response_is_html(resp: requests.Response) -> bool:
+    """True when a feed URL returned an HTML block page instead of RSS/XML."""
+    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if ctype in {"text/html", "application/xhtml+xml"}:
+        return True
+    sample = resp.content.lstrip()[:64].lower()
+    return sample.startswith((b"<!doctype html", b"<html"))
+
+
 def _parse_company_location(description: str) -> tuple[str, str]:
     """e.g. 'State University (Little Rock, AR)' -> company, location."""
     text = (description or "").strip()
@@ -80,6 +89,16 @@ def _crawl_feed(feed_url: str, config: dict, filter_titles: bool) -> int:
         resp.raise_for_status()
     except Exception as e:
         logger.warning("[higheredjobs] fetch failed %s: %s", feed_url, e)
+        return 0
+
+    if _response_is_html(resp):
+        logger.warning(
+            "[higheredjobs] %s returned HTML instead of RSS/XML "
+            "(status %s, content-type %s); feed may be blocked",
+            feed_url,
+            resp.status_code,
+            resp.headers.get("Content-Type") or "unknown",
+        )
         return 0
 
     try:

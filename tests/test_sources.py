@@ -140,3 +140,92 @@ def test_source_skip_reason_without_credentials():
     assert "ADZUNA" in (source_skip_reason("adzuna", cfg) or "")
     assert source_skip_reason("greenhouse", cfg)
     assert source_skip_reason("rss", cfg)
+
+
+def test_run_all_sources_with_no_sources_completes():
+    from jobagent.sources import run_all_sources
+
+    assert run_all_sources({}) == 0
+
+
+def test_run_all_sources_stub_completes(monkeypatch):
+    from jobagent import sources
+
+    class _Stub:
+        @staticmethod
+        def crawl(config):
+            return 2
+
+    monkeypatch.setattr(sources, "SOURCES", [(_Stub, "stub")])
+    assert sources.run_all_sources({"sources": {"stub": {"enabled": True}}}) == 2
+
+
+def test_run_all_sources_crawler_error_does_not_raise(monkeypatch):
+    from jobagent import sources
+
+    class _Stub:
+        @staticmethod
+        def crawl(config):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(sources, "SOURCES", [(_Stub, "stub")])
+    assert sources.run_all_sources({"sources": {"stub": {"enabled": True}}}) == 0
+
+
+def test_modules_referencing_logger_define_it():
+    import ast
+    import importlib
+    import pkgutil
+    from pathlib import Path
+
+    import jobagent
+
+    missing: list[str] = []
+    modules = [jobagent]
+    for info in pkgutil.walk_packages(jobagent.__path__, prefix="jobagent."):
+        modules.append(importlib.import_module(info.name))
+
+    for module in modules:
+        path = getattr(module, "__file__", None)
+        if not path or not str(path).endswith(".py"):
+            continue
+        source = Path(path).read_text(encoding="utf-8")
+        if not source.strip():
+            continue
+        tree = ast.parse(source)
+        uses = False
+        defines = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == "logger":
+                if isinstance(node.ctx, ast.Load):
+                    uses = True
+                elif isinstance(node.ctx, ast.Store):
+                    defines = True
+        if uses and not defines:
+            missing.append(module.__name__)
+
+    assert missing == []
+
+
+def test_higheredjobs_html_block_page_warns(monkeypatch, caplog):
+    import logging
+
+    from jobagent.sources import higheredjobs
+
+    class _Resp:
+        status_code = 200
+        content = (
+            b'<html style="height:100%"><head><META NAME="ROBOTS" '
+            b'CONTENT="NOINDEX, NOFOLLOW"></head><body></body></html>'
+        )
+        headers = {"Content-Type": "text/html"}
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(higheredjobs.requests, "get", lambda *args, **kwargs: _Resp())
+    with caplog.at_level(logging.WARNING):
+        added = higheredjobs._crawl_feed("https://example.test/feed", {}, False)
+
+    assert added == 0
+    assert any("HTML instead of RSS/XML" in record.message for record in caplog.records)
