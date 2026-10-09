@@ -47,6 +47,21 @@
   {% endif %}
 </div>
 <section class="panel">
+  <h2>Job sources</h2>
+  <table>
+    <tr><th>Source</th><th>Status</th><th>Detail</th></tr>
+    {% for row in source_rows %}
+    <tr>
+      <td>{{ row.name }}</td>
+      <td><span class="status-badge status-{{ row.status }}">{{ row.status_label }}</span></td>
+      <td class="muted">{{ row.detail }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3">Source status is on <a href="{{ base }}/settings">Settings</a>.</td></tr>
+    {% endfor %}
+  </table>
+</section>
+<section class="panel">
   <h2>Last database runs</h2>
   <table><tr><th>When</th><th>Found</th><th>Applied</th><th>Review</th><th>Dry run</th><th>Errors</th></tr>
   {% for r in history %}<tr><td>{{ r.run_at }}</td><td>{{ r.new }}</td><td>{{ r.applied }}</td><td>{{ r.flagged }}</td><td>{% if r.dry_run %}yes{% else %}no{% endif %}</td><td>{{ r.errors }}</td></tr>{% else %}<tr><td colspan="6">No run history yet.</td></tr>{% endfor %}

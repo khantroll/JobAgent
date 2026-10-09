@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from jobagent import AUTO_APPLY_ENABLED, __version__
-from jobagent.config import _ENV_API_KEYS, load_settings, scheduler_auto_apply, scheduler_dry_run
+from jobagent.config import (
+    _ENV_API_KEYS,
+    load_settings,
+    scheduler_auto_apply,
+    scheduler_dry_run,
+    secrets_file_path,
+)
 from jobagent.paths import project_root, settings_path
 from jobagent.web.auth import api_token_configured
 
@@ -58,6 +64,8 @@ def collect_report() -> dict[str, Any]:
         "enabled_sources": [],
         "configured_sources": [],
         "api_keys_present": {},
+        "secrets_path": str(secrets_file_path()),
+        "secrets_file_exists": secrets_file_path().is_file(),
         "warnings": warnings,
         "errors": errors,
     }
@@ -145,6 +153,7 @@ def format_report(report: dict[str, Any]) -> str:
         f"  sources on:   {', '.join(report['enabled_sources']) or '(none)'}",
         f"  keys present: {', '.join(present) or '(none)'}",
         f"  keys missing: {', '.join(missing) or '(none)'}",
+        f"  secrets file: {report.get('secrets_path')} ({'present' if report.get('secrets_file_exists') else 'absent'})",
         f"  status:       {'ok' if report['ok'] else 'PROBLEMS FOUND'}",
     ]
     for warning in report.get("warnings") or []:

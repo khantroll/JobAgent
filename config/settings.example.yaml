@@ -1,6 +1,9 @@
 # Global application / provider configuration for JobAgent 2.0.
 # Candidate identity and search preferences live in the database, not here.
-# Copy to config/settings.yaml. Secrets belong in .env — never in this file.
+# Copy to config/settings.yaml. Do not put API keys in this file.
+# Keys belong in config/secrets.yaml (Settings page) or .env. Both are gitignored.
+# config/secrets.yaml is not replaced by an update. .env and this file's api: block
+# are fallbacks when secrets.yaml has no value for that key.
 # The Simple UI is for local use (127.0.0.1). Do not expose it on a public network.
 
 search:
@@ -46,6 +49,8 @@ sources:
   themuse:
     enabled: true
     max_pages: 5
+    # Filled from the first candidate location when blank. Every level and
+    # category below is sent (the API ORs repeated values).
     location: ""
     categories: []
     levels: ["Senior Level", "Mid Level"]
@@ -53,6 +58,7 @@ sources:
   higheredjobs:
     enabled: true
     filter_by_titles: true
+    # Official category RSS only. An HTML bot-check marks the source blocked.
     category_ids: [144, 161, 162, 173]
   greenhouse:
     enabled: true
@@ -73,6 +79,8 @@ sources:
   workday:
     enabled: true
     filter_by_titles: true
+    # No API key. HTTP reads the public board CSRF token. If a WAF blocks that,
+    # set this true after: pip install -e ".[playwright]" && playwright install chromium
     use_playwright_fallback: false
     max_pages: 3
     companies: []

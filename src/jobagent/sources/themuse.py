@@ -30,6 +30,26 @@ def _location_str(job: dict) -> str:
     return ", ".join(n for n in names if n)
 
 
+def query_params(
+    *,
+    page: int,
+    location: str = "",
+    levels: list | None = None,
+    categories: list | None = None,
+) -> dict:
+    """Public jobs query. Repeated level and category values are OR filters."""
+    params: dict = {"page": page, "descending": "true"}
+    if str(location or "").strip():
+        params["location"] = str(location).strip()
+    clean_levels = [str(level).strip() for level in (levels or []) if str(level).strip()]
+    if clean_levels:
+        params["level"] = clean_levels
+    clean_categories = [str(cat).strip() for cat in (categories or []) if str(cat).strip()]
+    if clean_categories:
+        params["category"] = clean_categories
+    return params
+
+
 def crawl(config: dict) -> int:
     if not source_enabled(config, "themuse"):
         return 0
@@ -52,38 +72,33 @@ def crawl(config: dict) -> int:
     title_keywords = search_queries(config, "themuse", default_max=8) if filter_titles else []
 
     for page in range(1, max_pages + 1):
-        params: dict = {"page": page, "descending": "true"}
-        if location:
-            params["location"] = location
-        if levels:
-            params["level"] = levels[0] if len(levels) == 1 else None
-        for cat in categories[:1] or [None]:
-            if cat:
-                params["category"] = cat
-            try:
-                resp = requests.get(PUBLIC_JOBS_URL, params=params, headers=headers, timeout=30)
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception as e:
-                logger.warning("[themuse] page %s failed: %s", page, e)
-                break
+        params = query_params(
+            page=page, location=str(location or ""), levels=list(levels), categories=list(categories)
+        )
+        try:
+            resp = requests.get(PUBLIC_JOBS_URL, params=params, headers=headers, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.warning("[themuse] page %s failed: %s", page, e)
+            break
 
-            results = data.get("results", [])
-            if not results:
-                break
+        results = data.get("results", [])
+        if not results:
+            break
 
-            for job in results:
-                title = job.get("name", "")
-                if title_keywords and not any(
-                    q.lower() in title.lower() for q in title_keywords
-                ):
-                    continue
+        for job in results:
+            title = job.get("name", "")
+            if title_keywords and not any(
+                q.lower() in title.lower() for q in title_keywords
+            ):
+                continue
 
-                mapped = from_themuse(job)
-                if insert_mapped(mapped):
-                    total += 1
+            mapped = from_themuse(job)
+            if insert_mapped(mapped):
+                total += 1
 
-            logger.info("[themuse] page %s — %s results", page, len(results))
+        logger.info("[themuse] page %s — %s results", page, len(results))
 
     logger.info("[themuse] %s new jobs", total)
     return total

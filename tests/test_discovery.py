@@ -74,4 +74,5 @@ def test_missing_credentials_are_skipped_not_failed(db_path, monkeypatch):
     adzuna = next(s for s in summary["sources"] if s["name"] == "adzuna")
     assert adzuna["attempted"] is False
     assert "missing" in (adzuna["skipped_reason"] or "")
+    assert adzuna["status"] == "missing_key"
     assert adzuna["ok"] is True

@@ -203,6 +203,7 @@ def run_cycle(*, candidate_id: int | None = None) -> dict:
         "auto_apply_enabled": AUTO_APPLY_ENABLED,
         "submitted": False,
         "candidates": len(people),
+        "sources": list(crawl_cfg.get("_source_runs") or []),
     }
     run_repo.log_run(
         source="all",

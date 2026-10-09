@@ -17,6 +17,7 @@ venv/
 .env.*
 !.env.example
 config/settings.yaml
+config/secrets.yaml
 
 # Runtime data / personal information
 data/*
