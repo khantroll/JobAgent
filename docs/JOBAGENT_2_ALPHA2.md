@@ -48,7 +48,7 @@ This release makes discovery and ranking usable for real people reconstructed fr
    ```bash
    python -m jobagent.cli rank
    ```
-   Scores each candidate’s unscored matches independently. Without an LLM key, uses a deterministic heuristic and records `rank_provider=fallback`. With `llm.provider: mock` in settings, no network. Live Mistral/Anthropic keys stay in `.env`.
+   Scores each candidate’s unscored matches independently. Commute skips use the keyword heuristic. Otherwise OpenRouter, Mistral, and Anthropic are tried in the configured order, only when a key is set. Without a key, ranking records `rank_provider=fallback`. With `llm.provider: mock` in settings, no network.
 6. **UI** — http://127.0.0.1:8765/ — pick a person → Matches. Filter by score, source, work type, status. Read explanations. Do not expose this UI publicly.
 7. **Evaluation report**
    ```bash
@@ -65,7 +65,7 @@ This release makes discovery and ranking usable for real people reconstructed fr
 
 ## Ranking
 
-Legacy prompt preserved. Provider isolated in `jobagent.llm` (`anthropic` / `mistral` / `mock`). Results written to `candidate_job_matches.score`, `score_reason`, `ranked_at`, `rank_provider`, `rank_model`. Ranking A never writes B’s row.
+Legacy prompt preserved. Provider failover lives in `jobagent.llm` (`openrouter` / `anthropic` / `mistral` / `mock`). Results written to `candidate_job_matches.score`, `score_reason`, `ranked_at`, `rank_provider`, `rank_model`. Ranking A never writes B’s row.
 
 Joined match rows expose the catalog hash as `job_id`; `id` is the match-row primary key. Ranking and commute persist against `job_id` so `jobagent rank` works on unscored match lists.
 

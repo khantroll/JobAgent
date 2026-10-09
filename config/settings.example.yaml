@@ -101,10 +101,24 @@ routing:
   country_hint: "USA"
 
 llm:
-  # anthropic | mistral | mock
-  # If the live provider has no key, ranking uses a deterministic heuristic fallback.
-  provider: mistral
-  model: mistral-small-latest
+  # Ordered failover. A provider is used only when its key is set.
+  # On HTTP 429, wait for a bounded Retry-After, retry once, then cool that
+  # provider down and try the next one. The cycle also stops at the call and
+  # time caps and scores the rest with keywords. Commute skips never call an LLM.
+  provider: openrouter
+  providers:
+    - openrouter
+    - mistral
+    - anthropic
+  model: openrouter/free
+  models:
+    openrouter: openrouter/free
+    mistral: mistral-small-latest
+    anthropic: claude-sonnet-4-20250514
+  max_llm_calls: 40
+  max_llm_seconds: 90
+  max_backoff_seconds: 8
+  cooldown_seconds: 120
 
 scheduler:
   run_every_hours: 4

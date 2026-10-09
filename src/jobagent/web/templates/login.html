@@ -13,6 +13,6 @@
     </label>
     <button class="primary" type="submit">Sign in</button>
   </form>
-  <p class="muted">Set <code>JOB_AGENT_API_TOKEN</code> in <code>.env</code>. The same value protects the REST API as a Bearer token.</p>
+  <p class="muted">Set <code>JOB_AGENT_API_TOKEN</code> in the environment or <code>api_token</code> in <code>config/secrets.yaml</code>. Do not pass the token on the command line. The same value protects the REST API as a Bearer token.</p>
 </section>
 {% endblock %}

@@ -16,6 +16,22 @@
     Auto-apply opt-in
   </label>
   <p class="muted">Off unless you check this box. It is separate from dry run. This build does not submit applications or send messages even when both dry run is off and this box is checked. Eligibility on a match is not an application.</p>
+  <h2>Ranking</h2>
+  <p class="muted">OpenRouter is the default provider. Its model defaults to <code>openrouter/free</code>. On a rate limit, ranking waits for a bounded Retry-After, then uses the next provider in the list that has a key. Matches already skipped for commute use keyword scoring and do not spend the cap.</p>
+  <div class="grid">
+    <label>OpenRouter model
+      <input name="llm_model" value="{{ llm.model }}" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Provider order
+      <input name="llm_providers" value="{{ llm.providers }}" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Max LLM calls per cycle
+      <input name="llm_max_calls" value="{{ llm.max_llm_calls }}" inputmode="numeric">
+    </label>
+    <label>Max LLM seconds per cycle
+      <input name="llm_max_seconds" value="{{ llm.max_llm_seconds }}" inputmode="numeric">
+    </label>
+  </div>
   <h2>Source API keys</h2>
   <p class="muted">Saved in <code>{{ secrets_path }}</code>. That file is gitignored. Deploys must not replace it. A non-blank environment variable or <code>.env</code> value overrides the file. Leave a box blank to keep the saved key. Values are masked and are not written into the page.</p>
   <div class="grid">

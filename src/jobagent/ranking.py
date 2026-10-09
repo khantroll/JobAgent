@@ -4,7 +4,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from jobagent.llm import MissingLLMKey, complete_json, llm_settings, provider_has_key
+from jobagent.llm import (
+    LlmBudgetExceeded,
+    MissingLLMKey,
+    complete_json,
+    configured_provider_order,
+    llm_cycle_stats,
+    provider_has_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +62,35 @@ def heuristic_score(job: dict, config: dict) -> RankResult:
     return RankResult(score=score, reason=reason, provider="fallback", model="heuristic")
 
 
+def _keyword_fallback(job: dict, config: dict, detail: str = "") -> RankResult:
+    llm_cycle_stats().fallbacks += 1
+    result = heuristic_score(job, config)
+    if detail:
+        result.reason = f"{result.reason} {detail}".strip()
+    return result
+
+
+def ordered_for_ranking(jobs: list) -> list:
+    """Spend the LLM cap on matches that already passed the commute filter."""
+
+    def group(job: dict) -> int:
+        result = str(job.get("commute_result") or "")
+        if result in {"auto_apply", "needs_review"}:
+            return 0
+        if result == "skip":
+            return 2
+        return 1
+
+    return sorted(list(jobs), key=group)
+
+
 def score_job(job: dict, config: dict) -> RankResult:
-    provider, model = llm_settings(config)
-    if provider != "mock" and not provider_has_key(config, provider):
-        return heuristic_score(job, config)
+    if str(job.get("commute_result") or "") == "skip":
+        return _keyword_fallback(job, config, "Commute already skipped, so this match was not sent to an LLM.")
+
+    order = configured_provider_order(config)
+    if order != ["mock"] and not any(provider_has_key(config, name) for name in order):
+        return _keyword_fallback(job, config)
 
     profile = config.get("profile") or {}
     search = config.get("search") or {}
@@ -90,19 +122,21 @@ def score_job(job: dict, config: dict) -> RankResult:
             user=user_message,
             max_tokens=256,
         )
+        stats = llm_cycle_stats()
         return RankResult(
             score=int(data["score"]),
             reason=str(data.get("reason") or ""),
-            provider=provider,
-            model=model,
+            provider=stats.last_provider,
+            model=stats.last_model,
         )
     except MissingLLMKey:
-        return heuristic_score(job, config)
-    except Exception as exc:
-        logger.warning("LLM scoring failed (%s); using heuristic fallback", exc)
-        fallback = heuristic_score(job, config)
-        fallback.reason = f"{fallback.reason} (LLM error: {exc})"
-        return fallback
+        return _keyword_fallback(job, config)
+    except LlmBudgetExceeded:
+        logger.info("LLM cap reached; keyword fallback for %s", job.get("title") or "match")
+        return _keyword_fallback(job, config, "LLM call cap reached.")
+    except Exception:
+        logger.warning("LLM scoring failed; using keyword fallback")
+        return _keyword_fallback(job, config, "LLM providers failed.")
 
 
 def run_ranking(jobs: list, config: dict, *, candidate_id: int) -> None:
@@ -113,7 +147,7 @@ def run_ranking(jobs: list, config: dict, *, candidate_id: int) -> None:
     exclude = [e.lower() for e in search.get("exclude_keywords", [])]
     exclude_companies = [c.lower() for c in search.get("exclude_companies", [])]
 
-    for row in jobs:
+    for row in ordered_for_ranking(jobs):
         job = dict(row)
         jid = match_repo.catalog_job_id(job)
         title_lower = job.get("title", "").lower()
