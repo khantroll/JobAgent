@@ -13,11 +13,13 @@ import logging
 import random
 import re
 import time
+from urllib.parse import unquote
 
 import requests
 
 from jobagent.sources._common import (
     insert_mapped,
+    mark_source_blocked,
     source_cfg,
     source_enabled,
     title_filter_enabled,
@@ -65,12 +67,34 @@ def _search_payload(offset: int = 0) -> dict:
     }
 
 
+_CSRF_HTML_PATTERNS = (
+    r'"csrfToken"\s*:\s*"([^"]+)"',
+    r"'csrfToken'\s*:\s*'([^']+)'",
+    r'name="csrf-token"\s+content="([^"]+)"',
+    r'content="([^"]+)"\s+name="csrf-token"',
+    r'data-csrf-token="([^"]+)"',
+)
+
+
 def _csrf_token(session: requests.Session, html: str) -> str | None:
-    token = session.cookies.get("CALYPSO_CSRF_TOKEN")
-    if token:
-        return token
-    match = re.search(r'"csrfToken"\s*:\s*"([^"]+)"', html)
-    return match.group(1) if match else None
+    """Read the Calypso CSRF token from the cookie jar or the board HTML."""
+    for name in session.cookies.keys():
+        if "csrf" not in name.lower():
+            continue
+        raw = session.cookies.get(name)
+        if raw:
+            return unquote(str(raw))
+    if not html:
+        return None
+    for pattern in _CSRF_HTML_PATTERNS:
+        match = re.search(pattern, html)
+        if match:
+            return unquote(match.group(1))
+    return None
+
+
+def _waf_status(status_code: int) -> bool:
+    return status_code in {401, 403, 429} or status_code >= 500
 
 
 def _bootstrap_session(spec: BoardSpec) -> tuple[requests.Session | None, str | None, str]:
@@ -87,9 +111,11 @@ def _bootstrap_session(spec: BoardSpec) -> tuple[requests.Session | None, str | 
 
     if resp.status_code == 404:
         return None, None, resp.url
-    if resp.status_code >= 500:
+    if _waf_status(resp.status_code):
         logger.warning(
-            "[workday] %s/%s@%s careers page HTTP %s (bot/WAF - Playwright fallback if enabled)",
+            "[workday] %s/%s@%s careers page HTTP %s (WAF or bot check). "
+            "Playwright fallback runs only when sources.workday.use_playwright_fallback is true "
+            "and Chromium is installed (`pip install -e \".[playwright]\"` then `playwright install chromium`).",
             spec.tenant, spec.site, spec.cluster, resp.status_code,
         )
         return None, None, resp.url
@@ -97,7 +123,7 @@ def _bootstrap_session(spec: BoardSpec) -> tuple[requests.Session | None, str | 
     csrf = _csrf_token(session, resp.text)
     if not csrf:
         logger.warning(
-            "[workday] %s/%s@%s no CSRF token",
+            "[workday] %s/%s@%s no CSRF token (cookie CALYPSO_CSRF_TOKEN or csrfToken in the page)",
             spec.tenant, spec.site, spec.cluster,
         )
         return None, None, resp.url
@@ -189,7 +215,10 @@ def _fetch_via_playwright(
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        logger.warning("[workday] Playwright not installed - run: playwright install chromium")
+        logger.warning(
+            "[workday] Playwright not installed — pip install -e \".[playwright]\" "
+            "&& playwright install chromium"
+        )
         return []
 
     page_url = board_page_url(spec.tenant, spec.site, spec.cluster, spec.locale)
@@ -277,6 +306,7 @@ def _crawl_board(
         session, csrf = None, None
 
     raw_jobs: list[dict] = []
+    http_blocked = not (session and csrf)
 
     if session and csrf:
         for page in range(max_pages):
@@ -295,6 +325,14 @@ def _crawl_board(
                 break
             if resp.status_code == 401:
                 logger.warning("[workday] %s requires auth - skipping", company_name)
+                http_blocked = True
+                break
+            if _waf_status(resp.status_code):
+                logger.warning(
+                    "[workday] %s page %s HTTP %s (WAF or bot check)",
+                    company_name, page + 1, resp.status_code,
+                )
+                http_blocked = True
                 break
             if not resp.ok:
                 logger.warning(
@@ -310,7 +348,7 @@ def _crawl_board(
             if len(jobs) < PAGE_SIZE:
                 break
             time.sleep(random.uniform(1.0, 2.0))
-    elif use_playwright:
+    if http_blocked and use_playwright and not raw_jobs:
         logger.info("[workday] %s - trying Playwright fallback", company_name)
         pw_clusters = _clusters_to_try(spec, for_playwright=True)
         for try_cluster in pw_clusters:
@@ -331,6 +369,25 @@ def _crawl_board(
                 raw_jobs = pw_jobs
                 break
             logger.info("[workday] %s - Playwright @%s returned no listings", company_name, try_cluster)
+        if raw_jobs:
+            http_blocked = False
+
+    if http_blocked and not raw_jobs:
+        if use_playwright:
+            detail = (
+                "Workday HTTP did not return a CSRF token and the Playwright fallback "
+                "returned no listings. Install with `pip install -e \".[playwright]\"` "
+                "and `playwright install chromium` if the browser did not start. Workday has no API key."
+            )
+        else:
+            detail = (
+                "Workday HTTP did not return a CSRF token (WAF or bot check). "
+                "Playwright fallback is off. Set sources.workday.use_playwright_fallback: true "
+                "after `pip install -e \".[playwright]\"` and `playwright install chromium`. "
+                "Workday has no API key."
+            )
+        mark_source_blocked(detail)
+        logger.warning("[workday] status=blocked — %s", detail)
 
     skipped = 0
     total_inserted = 0
@@ -388,7 +445,10 @@ def crawl(config: dict) -> int:
             playwright_cm = sync_playwright().start()
             playwright_browser = playwright_cm.chromium.launch(headless=True)
         except ImportError:
-            logger.warning("[workday] Playwright not installed - run: playwright install chromium")
+            logger.warning(
+                "[workday] Playwright not installed — pip install -e \".[playwright]\" "
+                "&& playwright install chromium"
+            )
             use_playwright = False
         except Exception as e:
             logger.warning("[workday] Playwright startup failed - HTTP-only mode: %s", e)

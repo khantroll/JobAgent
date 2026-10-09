@@ -225,7 +225,8 @@ def test_higheredjobs_html_block_page_warns(monkeypatch, caplog):
 
     monkeypatch.setattr(higheredjobs.requests, "get", lambda *args, **kwargs: _Resp())
     with caplog.at_level(logging.WARNING):
-        added = higheredjobs._crawl_feed("https://example.test/feed", {}, False)
+        added, outcome = higheredjobs._crawl_feed("https://example.test/feed", {}, False)
 
     assert added == 0
+    assert outcome == "blocked"
     assert any("HTML instead of RSS/XML" in record.message for record in caplog.records)

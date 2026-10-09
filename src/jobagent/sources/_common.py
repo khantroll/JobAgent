@@ -160,9 +160,21 @@ class InsertCounters:
     inserted: int = 0
     duplicates: int = 0
     rejected: int = 0
+    blocked: bool = False
+    block_reason: str = ""
 
 
 _COUNTERS: ContextVar[InsertCounters | None] = ContextVar("jobagent_insert_counters", default=None)
+
+
+def mark_source_blocked(reason: str) -> None:
+    """Record that the current crawl cannot use this source. Does not log the reason."""
+    counters = _COUNTERS.get()
+    if counters is None:
+        return
+    counters.blocked = True
+    if not counters.block_reason:
+        counters.block_reason = reason
 
 
 @contextmanager

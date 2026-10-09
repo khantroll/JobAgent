@@ -33,6 +33,8 @@ def test_doctor_reports_fresh_db_without_mutating_or_leaking_secrets(db_path, mo
     assert report["api_keys_present"]["MISTRAL_API_KEY"] is True
     assert "super-secret-value-do-not-print" not in text
     assert "super-secret-value-do-not-print" not in format_report(report)
+    assert "secrets file:" in text
+    assert "secrets file:" in format_report(report)
     assert job_repo.count_jobs() == before_jobs
     assert cand_repo.count_candidates() == before_cands
     assert match_repo.count_all_matches() == before_matches

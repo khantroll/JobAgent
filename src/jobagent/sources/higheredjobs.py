@@ -1,8 +1,13 @@
 """
-HigherEdJobs — category RSS feeds (no public search API).
+HigherEdJobs — official category RSS feeds (no public search API).
 
-Feed format: https://www.higheredjobs.com/rss/categoryFeed.cfm?catID={id}
-Category list: https://www.higheredjobs.com/rss/
+The site documents one machine-readable URL per category:
+  https://www.higheredjobs.com/rss/categoryFeed.cfm?catID={id}
+Index: https://www.higheredjobs.com/rss/
+The search/rss.cfm?JobCat= pages are HTML instructions, not feeds.
+
+Requests identify as a feed reader. If the response is an HTML bot-check,
+the source is marked blocked. JobAgent does not scrape around that check.
 """
 import logging
 import re
@@ -11,8 +16,8 @@ import xml.etree.ElementTree as ET
 import requests
 
 from jobagent.sources._common import (
-    BROWSER_HEADERS,
     insert_mapped,
+    mark_source_blocked,
     source_cfg,
     source_enabled,
     title_filter_enabled,
@@ -35,9 +40,10 @@ DEFAULT_CATEGORY_IDS = [
 
 
 def _headers() -> dict:
+    """Identify as the feed client the site tells subscribers to use."""
     return {
-        **BROWSER_HEADERS,
-        "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        "User-Agent": "JobAgent/2.0 (RSS reader; +https://github.com/khantroll/JobAgent)",
+        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
     }
 
 
@@ -83,13 +89,14 @@ def _item_link(item: ET.Element, ns: dict) -> str:
     return ""
 
 
-def _crawl_feed(feed_url: str, config: dict, filter_titles: bool) -> int:
+def _crawl_feed(feed_url: str, config: dict, filter_titles: bool) -> tuple[int, str]:
+    """Return (inserted, outcome) where outcome is ok, empty, blocked, or error."""
     try:
         resp = requests.get(feed_url, headers=_headers(), timeout=30)
         resp.raise_for_status()
     except Exception as e:
         logger.warning("[higheredjobs] fetch failed %s: %s", feed_url, e)
-        return 0
+        return 0, "error"
 
     if _response_is_html(resp):
         logger.warning(
@@ -99,13 +106,13 @@ def _crawl_feed(feed_url: str, config: dict, filter_titles: bool) -> int:
             resp.status_code,
             resp.headers.get("Content-Type") or "unknown",
         )
-        return 0
+        return 0, "blocked"
 
     try:
         root = ET.fromstring(resp.content)
     except ET.ParseError as e:
         logger.warning("[higheredjobs] parse error %s: %s", feed_url, e)
-        return 0
+        return 0, "error"
 
     ns = {"atom": "http://www.w3.org/2005/Atom"}
     items = root.findall(".//item") or root.findall(".//atom:entry", ns)
@@ -128,7 +135,7 @@ def _crawl_feed(feed_url: str, config: dict, filter_titles: bool) -> int:
         if insert_mapped(mapped):
             count += 1
 
-    return count
+    return count, ("ok" if (count or items) else "empty")
 
 
 def _category_ids_for_crawl(config: dict) -> list[int]:
@@ -164,13 +171,27 @@ def crawl(config: dict) -> int:
 
     seen: set[str] = set()
     total = 0
+    html_blocks = 0
+    xml_feeds = 0
     for feed_url in feed_urls:
         if feed_url in seen:
             continue
         seen.add(feed_url)
-        added = _crawl_feed(feed_url, config, filter_titles)
+        added, outcome = _crawl_feed(feed_url, config, filter_titles)
         total += added
-        logger.info("[higheredjobs] %s — %s new jobs", feed_url, added)
+        if outcome == "blocked":
+            html_blocks += 1
+        elif outcome in {"ok", "empty"}:
+            xml_feeds += 1
+        logger.info("[higheredjobs] %s — %s new jobs (%s)", feed_url, added, outcome)
 
+    if html_blocks and xml_feeds == 0:
+        mark_source_blocked(
+            "HigherEdJobs category RSS returned an HTML bot-check instead of XML. "
+            "There is no official search API. JobAgent does not scrape around the check."
+        )
+        logger.warning(
+            "[higheredjobs] status=blocked — category RSS returned HTML instead of XML"
+        )
     logger.info("[higheredjobs] %s new jobs total", total)
     return total

@@ -24,7 +24,7 @@ from jobagent.db import init_db
 from jobagent.db import jobs as job_repo
 from jobagent.db import matches as match_repo
 from jobagent.db import runs as run_repo
-from jobagent.sources import SOURCES, source_skip_reason
+from jobagent.sources import SOURCES, annotate_source_result, source_skip_reason
 from jobagent.sources._common import source_enabled, track_inserts
 
 logger = logging.getLogger("jobagent.discovery")
@@ -41,36 +41,50 @@ class SourceRun:
     skipped_reason: str | None = None
     error: str | None = None
     elapsed_seconds: float = 0.0
+    status: str = ""
+    status_detail: str = ""
+
+
+def _source_run_from_record(record: dict) -> SourceRun:
+    fields = {key: record.get(key) for key in SourceRun.__dataclass_fields__}
+    return SourceRun(**fields)
 
 
 def _run_one_source(name: str, crawl_fn, config: dict) -> SourceRun:
     skip = source_skip_reason(name, config)
     if skip:
-        logger.info("[%s] skipped: %s", name, skip)
-        return SourceRun(name=name, attempted=False, ok=True, skipped_reason=skip)
+        return _source_run_from_record(
+            annotate_source_result(
+                name=name, attempted=False, ok=True, skipped_reason=skip
+            )
+        )
     started = time.perf_counter()
     try:
         with track_inserts() as counters:
             crawl_fn(config)
-        elapsed = time.perf_counter() - started
-        return SourceRun(
-            name=name,
-            attempted=True,
-            ok=True,
-            inserted=counters.inserted,
-            seen=counters.seen,
-            duplicates=counters.duplicates,
-            elapsed_seconds=round(elapsed, 3),
+        return _source_run_from_record(
+            annotate_source_result(
+                name=name,
+                attempted=True,
+                ok=True,
+                inserted=counters.inserted,
+                seen=counters.seen,
+                duplicates=counters.duplicates,
+                blocked=counters.blocked,
+                block_reason=counters.block_reason,
+                elapsed_seconds=round(time.perf_counter() - started, 3),
+            )
         )
     except Exception as exc:
-        elapsed = time.perf_counter() - started
         logger.error("[%s] crawler error: %s", name, exc)
-        return SourceRun(
-            name=name,
-            attempted=True,
-            ok=False,
-            error=str(exc),
-            elapsed_seconds=round(elapsed, 3),
+        return _source_run_from_record(
+            annotate_source_result(
+                name=name,
+                attempted=True,
+                ok=False,
+                error=str(exc),
+                elapsed_seconds=round(time.perf_counter() - started, 3),
+            )
         )
 
 
@@ -96,11 +110,13 @@ def run_discovery(*, dry_run: bool | None = None) -> dict[str, Any]:
     for module, name in SOURCES:
         if not source_enabled(config, name):
             results.append(
-                SourceRun(
-                    name=name,
-                    attempted=False,
-                    ok=True,
-                    skipped_reason="disabled in settings",
+                _source_run_from_record(
+                    annotate_source_result(
+                        name=name,
+                        attempted=False,
+                        ok=True,
+                        skipped_reason="disabled in settings",
+                    )
                 )
             )
             continue
@@ -128,11 +144,13 @@ def run_discovery(*, dry_run: bool | None = None) -> dict[str, Any]:
         results.append(_run_one_source("rss", _rss, config))
     else:
         results.append(
-            SourceRun(
-                name="rss",
-                attempted=False,
-                ok=True,
-                skipped_reason="no rss_feeds configured",
+            _source_run_from_record(
+                annotate_source_result(
+                    name="rss",
+                    attempted=False,
+                    ok=True,
+                    skipped_reason="no rss_feeds configured",
+                )
             )
         )
 
@@ -153,7 +171,9 @@ def run_discovery(*, dry_run: bool | None = None) -> dict[str, Any]:
         ],
         "sources": [asdict(r) for r in results],
         "sources_attempted": [r.name for r in results if r.attempted],
-        "sources_succeeded": [r.name for r in results if r.attempted and r.ok],
+        "sources_succeeded": [
+            r.name for r in results if r.attempted and r.ok and r.status != "blocked"
+        ],
         "sources_failed": [r.name for r in results if not r.ok],
         "sources_skipped": [r.name for r in results if r.skipped_reason],
         "jobs_fetched": sum(r.seen for r in results),

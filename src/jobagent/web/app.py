@@ -14,10 +14,14 @@ from fastapi.templating import Jinja2Templates
 
 from jobagent import AUTO_APPLY_ENABLED, __version__
 from jobagent.config import (
+    api_key_form_rows,
+    ensure_secrets_file,
     load_settings,
+    save_api_secrets,
     save_scheduler_settings,
     scheduler_auto_apply,
     scheduler_dry_run,
+    secrets_file_path,
 )
 from jobagent import application_package as package_service
 from jobagent.db import candidates as cand_repo
@@ -48,6 +52,15 @@ UI_DIR = Path(__file__).parent
 async def lifespan(app: FastAPI):
     uploads_dir()
     init_db()
+    try:
+        ensure_secrets_file()
+    except Exception:
+        # Do not log the exception: a YAML error can include credential text.
+        import logging
+
+        logging.getLogger("jobagent.web").warning(
+            "Could not copy API keys into the secrets file"
+        )
     yield
 
 
@@ -238,6 +251,7 @@ def index(request: Request, candidate_id: int | None = None):
             "history": run_repo.list_run_history(5),
             "run_error": request.query_params.get("run_error"),
             "import_report": run_repo.latest_import_report(),
+            "source_rows": _source_rows(),
         },
     )
 
@@ -910,8 +924,48 @@ def jobs_page(
     )
 
 
+def _latest_source_runs() -> dict:
+    import json
+
+    for row in run_repo.list_run_history(30):
+        raw = row.get("summary") or ""
+        if "sources" not in raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        items = data.get("sources")
+        if not isinstance(items, list) or not items:
+            continue
+        return {
+            item["name"]: item
+            for item in items
+            if isinstance(item, dict) and item.get("name")
+        }
+    return {}
+
+
+def _source_rows() -> list[dict]:
+    from jobagent.sources import source_status_rows
+
+    try:
+        cfg = load_settings()
+    except Exception:
+        cfg = {}
+    try:
+        last = _latest_source_runs()
+    except Exception:
+        last = {}
+    return source_status_rows(cfg, last)
+
+
 @app.get("/settings")
 def settings_page(request: Request):
+    try:
+        ensure_secrets_file()
+    except Exception:
+        pass
     flags = _scheduler_view()
     return _render(
         request,
@@ -920,6 +974,9 @@ def settings_page(request: Request):
             "dry_run": flags["dry_run"],
             "auto_apply_opt_in": flags["auto_apply_opt_in"],
             "msg": request.query_params.get("msg"),
+            "api_keys": api_key_form_rows(),
+            "secrets_path": str(secrets_file_path()),
+            "source_rows": _source_rows(),
         },
     )
 
@@ -932,8 +989,29 @@ def _flag_on(values: list[str]) -> bool:
 def settings_save(
     dry_run: list[str] = Form([]),
     auto_apply: list[str] = Form([]),
+    key_adzuna_app_id: str = Form(""),
+    key_adzuna_app_key: str = Form(""),
+    key_rapidapi_key: str = Form(""),
+    key_usajobs_api_key: str = Form(""),
+    key_usajobs_user_agent: str = Form(""),
+    key_themuse_api_key: str = Form(""),
+    key_google_maps_key: str = Form(""),
+    key_anthropic_key: str = Form(""),
+    key_mistral_key: str = Form(""),
 ):
     save_scheduler_settings(dry_run=_flag_on(dry_run), auto_apply=_flag_on(auto_apply))
+    posted = {
+        "adzuna_app_id": key_adzuna_app_id,
+        "adzuna_app_key": key_adzuna_app_key,
+        "rapidapi_key": key_rapidapi_key,
+        "usajobs_api_key": key_usajobs_api_key,
+        "usajobs_user_agent": key_usajobs_user_agent,
+        "themuse_api_key": key_themuse_api_key,
+        "google_maps_key": key_google_maps_key,
+        "anthropic_key": key_anthropic_key,
+        "mistral_key": key_mistral_key,
+    }
+    save_api_secrets(posted)
     return RedirectResponse(url("/settings?msg=Saved"), status_code=303)
 
 

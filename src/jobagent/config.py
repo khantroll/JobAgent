@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from dotenv import load_dotenv
 
 from jobagent.paths import config_dir, project_root, settings_path
 
@@ -22,6 +21,302 @@ _ENV_API_KEYS = {
     "themuse_api_key": "THEMUSE_API_KEY",
     "google_maps_key": "GOOGLE_MAPS_KEY",
 }
+
+# Shown on Settings. `dest` matches secrets.yaml api: and the legacy profile.yaml names.
+API_KEY_FIELDS: tuple[dict[str, str], ...] = (
+    {
+        "dest": "adzuna_app_id",
+        "env": "ADZUNA_APP_ID",
+        "label": "Adzuna app id",
+        "source": "Adzuna",
+        "hint": "Required with the app key. From the Adzuna developer dashboard.",
+    },
+    {
+        "dest": "adzuna_app_key",
+        "env": "ADZUNA_APP_KEY",
+        "label": "Adzuna app key",
+        "source": "Adzuna",
+        "hint": "Required with the app id.",
+    },
+    {
+        "dest": "rapidapi_key",
+        "env": "RAPIDAPI_KEY",
+        "label": "JSearch RapidAPI key",
+        "source": "JSearch",
+        "hint": "Required. Sent as x-rapidapi-key to jsearch.p.rapidapi.com.",
+    },
+    {
+        "dest": "usajobs_api_key",
+        "env": "USAJOBS_API_KEY",
+        "label": "USAJOBS API key",
+        "source": "USAJOBS",
+        "hint": "Required. From developer.usajobs.gov. Authorization-Key header.",
+    },
+    {
+        "dest": "usajobs_user_agent",
+        "env": "USAJOBS_USER_AGENT",
+        "label": "USAJOBS contact email",
+        "source": "USAJOBS",
+        "hint": "Required. The email registered with USAJOBS, sent as User-Agent.",
+    },
+    {
+        "dest": "themuse_api_key",
+        "env": "THEMUSE_API_KEY",
+        "label": "The Muse API key",
+        "source": "The Muse",
+        "hint": "Optional. The public jobs API works without a key.",
+    },
+    {
+        "dest": "google_maps_key",
+        "env": "GOOGLE_MAPS_KEY",
+        "label": "Google Maps key",
+        "source": "Commute",
+        "hint": "Optional. Drive-time lookups. OSRM is used when this is empty.",
+    },
+    {
+        "dest": "anthropic_key",
+        "env": "ANTHROPIC_API_KEY",
+        "label": "Anthropic API key",
+        "source": "Ranking",
+        "hint": "Optional. Used only when llm.provider is anthropic.",
+    },
+    {
+        "dest": "mistral_key",
+        "env": "MISTRAL_API_KEY",
+        "label": "Mistral API key",
+        "source": "Ranking",
+        "hint": "Optional. Used only when llm.provider is mistral.",
+    },
+)
+
+
+def credential_usable(value: Any) -> bool:
+    """True for a real credential. Placeholders such as YOUR_... count as missing."""
+    text = str(value or "").strip()
+    return bool(text) and not text.upper().startswith("YOUR_")
+
+
+def mask_secret(value: Any) -> str:
+    """Last four characters only, and only when the value is long enough to mask."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if len(text) <= 8:
+        return "•" * len(text)
+    return "••••" + text[-4:]
+
+
+def secrets_file_path() -> Path:
+    """Gitignored key store. Deploys must not replace this file."""
+    override = os.environ.get("JOBAGENT_SECRETS_PATH", "").strip()
+    if override:
+        return Path(override)
+    return config_dir() / "secrets.yaml"
+
+
+def _profile_yaml_paths() -> list[Path]:
+    """Legacy api: blocks. Lowest priority last in this list (www, then config)."""
+    candidates = [
+        project_root() / "www" / "config" / "profile.yaml",
+        project_root() / "config" / "profile.yaml",
+        config_dir() / "profile.yaml",
+    ]
+    seen: set[str] = set()
+    paths: list[Path] = []
+    for path in candidates:
+        key = str(path.resolve()) if path.exists() else str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(path)
+    return paths
+
+
+def _read_yaml_mapping(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _api_from_yaml(path: Path) -> dict[str, Any]:
+    api = _read_yaml_mapping(path).get("api") or {}
+    return dict(api) if isinstance(api, dict) else {}
+
+
+def _fill_blank_env_from_dotenv(env_path: Path | None = None) -> None:
+    """Load .env without letting a blank process variable hide the file value."""
+    path = env_path or (project_root() / ".env")
+    if not path.is_file():
+        return
+    from dotenv import dotenv_values
+
+    parsed = dotenv_values(path)
+    for key, value in parsed.items():
+        if not key or value is None or not str(value).strip():
+            continue
+        current = os.environ.get(key)
+        if current is None or not str(current).strip():
+            os.environ[key] = str(value)
+
+
+def _origin_for_profile(path: Path) -> str:
+    parts = set(path.parts)
+    if "www" in parts:
+        return "www/config/profile.yaml"
+    return "config/profile.yaml"
+
+
+def _layered_api(settings_api: dict[str, Any] | None) -> dict[str, tuple[str, str]]:
+    """Winning credential per key, with the place it came from.
+
+    Non-blank environment (after .env fills blanks) wins, then secrets.yaml,
+    then settings.yaml api:, then legacy profile.yaml api:. YOUR_ placeholders
+    are ignored so they cannot wipe a real key.
+    """
+    found: dict[str, tuple[str, str]] = {}
+
+    def take(mapping: dict[str, Any], origin: str) -> None:
+        for dest in _ENV_API_KEYS:
+            value = mapping.get(dest)
+            if credential_usable(value):
+                found[dest] = (str(value).strip(), origin)
+
+    for path in _profile_yaml_paths():
+        take(_api_from_yaml(path), _origin_for_profile(path))
+    take(dict(settings_api or {}), "settings.yaml")
+    take(_api_from_yaml(secrets_file_path()), "config/secrets.yaml")
+    env_values = {
+        dest: os.environ.get(env_name, "")
+        for dest, env_name in _ENV_API_KEYS.items()
+    }
+    take(env_values, "environment")
+    return found
+
+
+def _settings_api_on_disk() -> dict[str, Any]:
+    """api: from the real settings file, never the committed example."""
+    path = writable_settings_path()
+    if not path.is_file():
+        return {}
+    example = config_dir() / "settings.example.yaml"
+    try:
+        if example.is_file() and path.resolve() == example.resolve():
+            return {}
+    except OSError:
+        return {}
+    return _api_from_yaml(path)
+
+
+def _recovered_api_keys() -> dict[str, str]:
+    """Best key from places a deploy may overwrite. Process env included."""
+    _fill_blank_env_from_dotenv()
+    found: dict[str, str] = {}
+
+    def take(mapping: dict[str, Any]) -> None:
+        for dest in _ENV_API_KEYS:
+            if dest in found:
+                continue
+            value = mapping.get(dest)
+            if credential_usable(value):
+                found[dest] = str(value).strip()
+
+    take({dest: os.environ.get(env_name, "") for dest, env_name in _ENV_API_KEYS.items()})
+    from dotenv import dotenv_values
+
+    env_file = project_root() / ".env"
+    if env_file.is_file():
+        parsed = dotenv_values(env_file)
+        take({dest: parsed.get(env_name) for dest, env_name in _ENV_API_KEYS.items()})
+    take(_settings_api_on_disk())
+    for path in reversed(_profile_yaml_paths()):
+        take(_api_from_yaml(path))
+    return found
+
+
+def ensure_secrets_file() -> Path:
+    """Copy missing keys into config/secrets.yaml. Never replaces a saved value."""
+    path = secrets_file_path()
+    data = _read_yaml_mapping(path)
+    api = dict(data.get("api") or {}) if isinstance(data.get("api"), dict) else {}
+    changed = False
+    for dest, value in _recovered_api_keys().items():
+        if credential_usable(api.get(dest)):
+            continue
+        api[dest] = value
+        changed = True
+    if not changed:
+        return path
+    stored = {dest: str(api[dest]).strip() for dest in _ENV_API_KEYS if credential_usable(api.get(dest))}
+    _write_secrets(path, stored)
+    return path
+
+
+def _write_secrets(path: Path, api: dict[str, str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = yaml.safe_dump({"api": api}, sort_keys=False, allow_unicode=True)
+    header = (
+        "# JobAgent API keys. Gitignored. Do not commit this file.\n"
+        "# Deploys and updates must not replace it. A non-blank environment\n"
+        "# variable or .env value overrides a key stored here.\n"
+    )
+    path.write_text(header + body, encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def save_api_secrets(updates: dict[str, str]) -> Path:
+    """Persist non-blank Settings fields. A blank field keeps the stored key."""
+    path = secrets_file_path()
+    data = _read_yaml_mapping(path)
+    api = dict(data.get("api") or {}) if isinstance(data.get("api"), dict) else {}
+    for dest, value in _recovered_api_keys().items():
+        if not credential_usable(api.get(dest)):
+            api[dest] = value
+    for dest, raw in updates.items():
+        if dest not in _ENV_API_KEYS:
+            continue
+        text = str(raw or "").strip()
+        if not credential_usable(text):
+            continue
+        api[dest] = text
+    stored = {dest: str(api[dest]).strip() for dest in _ENV_API_KEYS if credential_usable(api.get(dest))}
+    if not stored and not path.is_file():
+        return path
+    _write_secrets(path, stored)
+    return path
+
+
+def api_key_form_rows() -> list[dict[str, Any]]:
+    """Settings-page rows. Masked display only — never the raw credential."""
+    _fill_blank_env_from_dotenv()
+    cfg_path = settings_path()
+    settings_api: dict[str, Any] = {}
+    if cfg_path.is_file():
+        settings_api = _api_from_yaml(cfg_path)
+    layered = _layered_api(settings_api)
+    rows: list[dict[str, Any]] = []
+    for field in API_KEY_FIELDS:
+        value, origin = layered.get(field["dest"], ("", "missing"))
+        usable = credential_usable(value)
+        rows.append(
+            {
+                "dest": field["dest"],
+                "env": field["env"],
+                "label": field["label"],
+                "source": field["source"],
+                "hint": field["hint"],
+                "configured": usable,
+                "masked": mask_secret(value) if usable else "",
+                "origin": origin if usable else "missing",
+            }
+        )
+    return rows
 
 
 def as_bool(value: Any, default: bool) -> bool:
@@ -80,20 +375,23 @@ def writable_settings_path() -> Path:
 
 
 def load_settings(path: Path | None = None) -> dict[str, Any]:
-    """Return global config. Candidate identity is never read from this file."""
-    load_dotenv(project_root() / ".env")
+    """Return global config. Candidate identity is never read from this file.
+
+    Credentials resolve from a non-blank environment variable or .env, then
+    config/secrets.yaml, then this file's api: block, then legacy profile.yaml.
+    This function does not write the secrets file.
+    """
+    _fill_blank_env_from_dotenv()
     cfg_path = path or settings_path()
     data: dict[str, Any] = {}
     if cfg_path.is_file():
         with open(cfg_path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            loaded = yaml.safe_load(fh) or {}
+            if isinstance(loaded, dict):
+                data = loaded
     cfg = copy.deepcopy(data)
-    api = dict(cfg.get("api") or {})
-    for dest, env_name in _ENV_API_KEYS.items():
-        value = os.environ.get(env_name, "").strip()
-        if value:
-            api[dest] = value
-    cfg["api"] = api
+    layered = _layered_api(dict(cfg.get("api") or {}))
+    cfg["api"] = {dest: value for dest, (value, _origin) in layered.items()}
     scheduler = dict(cfg.get("scheduler") or {})
     scheduler["dry_run"] = scheduler_dry_run({"scheduler": scheduler})
     scheduler["auto_apply"] = scheduler_auto_apply({"scheduler": scheduler})
@@ -255,6 +553,11 @@ def crawl_config_for_candidates(candidates: list[dict], base: dict | None = None
     if locations and not usajobs.get("location"):
         usajobs["location"] = locations[0]
         sources["usajobs"] = usajobs
+        cfg["sources"] = sources
+    themuse = dict(sources.get("themuse") or {})
+    if locations and not str(themuse.get("location") or "").strip():
+        themuse["location"] = locations[0]
+        sources["themuse"] = themuse
         cfg["sources"] = sources
     if greenhouse:
         gh_cfg = dict(sources.get("greenhouse") or {})

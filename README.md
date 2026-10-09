@@ -20,8 +20,9 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip setuptools wheel
 pip install -e ".[dev]"
 
-cp .env.example .env        # fill API keys; never commit .env
+cp .env.example .env        # optional; never commit .env
 cp config/settings.example.yaml config/settings.yaml   # optional local overrides
+# API keys: Settings page, or config/secrets.yaml (gitignored — do not replace it on deploy)
 
 python -m jobagent.cli init-db
 python -m jobagent.cli doctor
@@ -35,7 +36,9 @@ python -m jobagent.cli serve --host 127.0.0.1 --port 8765
 
 If `JOB_AGENT_API_TOKEN` is unset, both UI and API stay open for local development. If it is set, the UI requires a login cookie and the REST API requires `Authorization: Bearer <token>`. There is no user-account system.
 
-People, titles, resume text, and search preferences are edited in the UI and stored in SQLite. `config/settings.yaml` holds global source/scheduler/routing flags only. Secrets come from `.env`.
+People, titles, resume text, and search preferences are edited in the UI and stored in SQLite. `config/settings.yaml` holds global source/scheduler/routing flags only.
+
+API keys are saved from **Settings** into gitignored `config/secrets.yaml`. Deploys must not delete or replace that file (exclude it from `rsync --delete`). A non-blank environment variable or `.env` value overrides the file. If the secrets file has no value, JobAgent also reads `config/settings.yaml` `api:` and legacy `config/profile.yaml` `api:` (and `www/config/profile.yaml` if that file is still on disk). The first serve or Settings visit copies those into `config/secrets.yaml` without replacing a key already stored there. `jobagent doctor` prints which key *names* are set, never the values. Workday does not use an API key.
 
 The `data/` directory starts empty aside from `.gitkeep`. A fresh database is created by `init-db`. Do not commit `data/jobagent.db`.
 
