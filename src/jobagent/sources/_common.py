@@ -162,6 +162,8 @@ class InsertCounters:
     rejected: int = 0
     blocked: bool = False
     block_reason: str = ""
+    status_override: str = ""
+    status_detail: str = ""
 
 
 _COUNTERS: ContextVar[InsertCounters | None] = ContextVar("jobagent_insert_counters", default=None)
@@ -175,6 +177,15 @@ def mark_source_blocked(reason: str) -> None:
     counters.blocked = True
     if not counters.block_reason:
         counters.block_reason = reason
+
+
+def mark_source_status(status: str, detail: str) -> None:
+    """Override the crawl status line. Does not log credential values."""
+    counters = _COUNTERS.get()
+    if counters is None:
+        return
+    counters.status_override = status
+    counters.status_detail = detail
 
 
 @contextmanager

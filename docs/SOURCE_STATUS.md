@@ -9,9 +9,12 @@ Keys are read from a non-blank environment variable or `.env`, then gitignored `
 | Adzuna | on | `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` | Unit: payload mapping. Live: needs keys | Title filter may drop loose API hits | Mapping extracted; skip without keys (unchanged) |
 | JSearch | on | `RAPIDAPI_KEY` | Unit: mapping incl. remote prefix | RapidAPI quota / paid | Mapping extracted |
 | HigherEdJobs | on | none (official category RSS) | Unit: company/location parse + HTML bot-check → blocked | No public search API. `search/rss.cfm` is an HTML instructions page, not a feed. An HTML response marks `status=blocked`. No workaround scraper | Feed-reader User-Agent. Block is explicit |
-| Greenhouse | on | none; needs board slugs | Unit: job JSON mapping | Empty slug list → skip. Some boards 404 | Slugs unioned from search-enabled `candidate_employers` plus settings |
-| Lever | on | none; needs slugs | Unit: posting JSON mapping | Empty slug list → skip | Same employer union as Greenhouse |
-| Workday | on | none (no API key; needs board specs) | Unit: posting map + CSRF extraction | CSRF from `CALYPSO_CSRF_TOKEN` or `csrfToken` in HTML. HTTP 401/403/429/5xx is a WAF block. Playwright is optional and off in the example: `pip install -e ".[playwright]"`, `playwright install chromium`, `use_playwright_fallback: true` | Clear `status=blocked` when HTTP and Playwright both fail |
+| HigherEdJobs mail | on | IMAP host, username, and password in `config/secrets.yaml` (`imap:`) or `HEJ_IMAP_*` | Unit: alert HTML fixture, dedupe, masked settings | Optional. Badge is `not configured`, `ok`, or `no new alerts`. Does not log the mailbox secret | Reads saved-search alert mail only |
+| Greenhouse | on | none; needs board slugs | Unit: job JSON mapping | Empty slug list → skip. Some boards 404 | Manual slugs plus enabled rows in `config/discovered_boards.yaml` |
+| Lever | on | none; needs slugs | Unit: posting JSON mapping | Empty slug list → skip | Manual slugs plus enabled discovered boards |
+| Ashby | on | none; needs board slugs | Unit: public job-board JSON shape | Empty slug list → blocked. No public customer index | Official `posting-api/job-board/{slug}` only |
+| SmartRecruiters | on | none; needs company tokens | Unit: postings `content` list | Empty token list → blocked. No public customer index | Official company postings API only |
+| Workday | on | none (no API key; needs board specs) | Unit: posting map + CSRF extraction | CSRF from `CALYPSO_CSRF_TOKEN` or `csrfToken` in HTML. HTTP 401/403/429/5xx is a WAF block. Playwright is optional and off in the example: `pip install -e ".[playwright]"`, `playwright install chromium`, `use_playwright_fallback: true` | Manual boards plus enabled discovered tenants. Clear `status=blocked` when HTTP and Playwright both fail |
 | USAJOBS | on | `USAJOBS_API_KEY` + `USAJOBS_USER_AGENT` | Unit: SearchResult mapping | Registration email required as User-Agent | Mapping extracted; location filter unchanged |
 | The Muse | on | optional `THEMUSE_API_KEY` | Unit: public job JSON, repeated level/category params, candidate location | Public endpoint may throttle without key. Location comes from the candidate when `sources.themuse.location` is blank. Every configured level is sent | Seniority filter no longer dropped when more than one level is set |
 | Remotive | on | none | Unit: HTML strip + fields | Remote-only API | Mapping extracted |
@@ -33,6 +36,19 @@ Against a fresh import + reconstructed Jeffrey/Tami, `jobagent crawl --dry-run` 
 - Auto-apply remained off
 
 Workday returned a small number of postings over HTTP without Playwright; tenant WAF behavior will vary.
+
+## Employer discovery
+
+`python -m jobagent.cli discover-employers` checks public JSON only. There are **28** candidate patterns: four slug shapes (compact, hyphen, underscore, first token) on Greenhouse, Lever, Ashby, and SmartRecruiters, and Workday clusters `wd1`, `wd5`, and `wd3` with sites `External`, `Careers`, the compact tenant, and the Pascal site name. A candidate is kept only when that API returns a job-board body. `robots.txt` disallow rules skip the request. Positive and negative results, including robots decisions, cache for 14 days in `data/employer_probe_cache.json`. Confirmed boards go to gitignored `config/discovered_boards.yaml`. Names that do not match stay on the unmatched list shown in Settings.
+
+Company names come from `config/employer_names.txt` (Settings), companies already on collected jobs, and optionally one OpenStreetMap Overpass query (`--near-home`) around the configured home location. Third-party slug dumps are not imported.
+
+## HigherEdJobs mailbox setup
+
+1. Create the saved search on HigherEdJobs and enable its email alert.
+2. Create a dedicated mailbox, or forward the alert into one.
+3. Save the IMAP host, port, folder, and sender filter on Settings. Put the username and password there too. They are stored in gitignored `config/secrets.yaml`, shown masked, and omitted from logs and `jobagent doctor`.
+4. Run a cycle. New HigherEdJobs links are inserted like any other source and deduped by URL.
 
 ## Dry-run contract
 

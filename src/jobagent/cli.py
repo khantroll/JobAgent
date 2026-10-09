@@ -75,6 +75,25 @@ def main(argv: list[str] | None = None) -> int:
     doctor = sub.add_parser("doctor", help="Non-destructive environment and database checks")
     doctor.add_argument("--json", action="store_true", help="Print machine-readable JSON")
 
+    discover = sub.add_parser(
+        "discover-employers",
+        help="Find public job-board URLs for company names. Does not submit applications.",
+    )
+    discover.add_argument("--names-file", type=Path, default=None, help="CSV or text file of company names")
+    discover.add_argument(
+        "--include-catalog",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Also use company names already stored on collected jobs",
+    )
+    discover.add_argument(
+        "--near-home",
+        action="store_true",
+        help="Add one OpenStreetMap query around search.location",
+    )
+    discover.add_argument("--delay", type=float, default=1.0, help="Seconds between HTTP requests")
+    discover.add_argument("--limit", type=int, default=100, help="Maximum company names to probe")
+
     args = parser.parse_args(argv)
     _configure_logging()
 
@@ -156,6 +175,21 @@ def main(argv: list[str] | None = None) -> int:
         code, text = run_doctor(as_json=args.json)
         print(text)
         return code
+
+    if args.command == "discover-employers":
+        from jobagent.config import load_settings
+        from jobagent.employers.discover import collect_names, discover_employers
+
+        names = collect_names(
+            include_file=True,
+            include_catalog=args.include_catalog,
+            near_home=args.near_home,
+            config=load_settings(),
+            names_file=args.names_file,
+        )[: max(0, args.limit)]
+        summary = discover_employers(names, delay=args.delay)
+        print(json.dumps(summary, indent=2, default=str))
+        return 0
 
     parser.error(f"unknown command {args.command}")
     return 2

@@ -21,7 +21,12 @@ def crawl(config: dict) -> int:
         return 0
 
     cfg = source_cfg(config, "lever")
-    companies = cfg.get("companies") or config.get("search", {}).get("lever_companies", [])
+    from jobagent.employers.boards import slugs_for
+
+    companies = slugs_for(
+        "lever",
+        cfg.get("companies") or config.get("search", {}).get("lever_companies", []),
+    )
     instance = cfg.get("instance", "global")
     base = (
         "https://api.eu.lever.co/v0/postings"

@@ -26,6 +26,31 @@
     </label>
     {% endfor %}
   </div>
+  <h2>HigherEdJobs email alerts</h2>
+  <p class="muted">Optional. Create a saved-search alert on HigherEdJobs and deliver it to a dedicated mailbox. These fields are stored in <code>config/secrets.yaml</code>. The username and password are masked and are not written into the page. Leave them blank to keep the saved values.</p>
+  <div class="grid">
+    <label>IMAP host
+      <input name="imap_host" value="{{ imap.host }}" autocomplete="off" placeholder="imap.example.com">
+    </label>
+    <label>IMAP port
+      <input name="imap_port" value="{{ imap.port }}" autocomplete="off">
+    </label>
+    <label>Folder
+      <input name="imap_folder" value="{{ imap.folder }}" autocomplete="off">
+    </label>
+    <label>Sender contains
+      <input name="imap_sender" value="{{ imap.sender }}" autocomplete="off">
+    </label>
+    <label>Username
+      <input type="password" name="imap_username" value="" autocomplete="off" placeholder="{% if imap.username_configured %}Saved — leave blank to keep{% else %}Not set{% endif %}">
+      <span class="muted">{% if imap.username_configured %}{{ imap.username_masked }}{% else %}Not set{% endif %}</span>
+    </label>
+    <label>Password
+      <input type="password" name="imap_password" value="" autocomplete="off" placeholder="{% if imap.password_configured %}Saved — leave blank to keep{% else %}Not set{% endif %}">
+      <span class="muted">{% if imap.password_configured %}{{ imap.password_masked }}{% else %}Not set{% endif %}</span>
+    </label>
+  </div>
+  <p class="muted">Setup: on HigherEdJobs, save the search you want and turn on the email alert. Create a mailbox that receives only those alerts (or a forward rule into one). Put that mailbox here, then run a cycle. The source badge is <strong>not configured</strong> until host, username, and password are set, <strong>ok</strong> when new listings are stored, and <strong>no new alerts</strong> when the mailbox has nothing new.</p>
   <p><button class="primary" type="submit">Save settings</button></p>
 </form>
 <section class="panel">
@@ -42,6 +67,37 @@
     {% endfor %}
   </table>
 </section>
+<form class="panel form" method="post" action="{{ base }}/settings/employers" hx-boost="false">
+  <h2>Company list</h2>
+  <p class="muted">One company name per line, or a CSV whose first column is the name. This file is gitignored. Discovery checks public Greenhouse, Lever, Ashby, SmartRecruiters, and Workday JSON endpoints only. It does not scrape LinkedIn or use a logged-in session.</p>
+  <label>Names
+    <textarea name="employer_names" rows="8">{{ employer_names }}</textarea>
+  </label>
+  <p class="muted">After saving, run <code>python -m jobagent.cli discover-employers</code>. Add <code>--near-home</code> for one OpenStreetMap query around the configured home location. Requests are paced and robots.txt is respected.</p>
+  <h2>Discovered boards</h2>
+  <table>
+    <tr><th>On</th><th>Company</th><th>Board</th><th>Pattern</th><th>URL</th></tr>
+    {% for board in discovered_boards %}
+    <tr>
+      <td>
+        <input type="hidden" name="board_id" value="{{ board.id }}">
+        <input type="checkbox" name="board_enabled" value="{{ board.id }}" {% if board.enabled != false %}checked{% endif %}>
+      </td>
+      <td>{{ board.name }}</td>
+      <td>{{ board.ats }}</td>
+      <td class="muted">{{ board.pattern }}</td>
+      <td class="muted">{{ board.url }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No confirmed boards yet.</td></tr>
+    {% endfor %}
+  </table>
+  <h2>Unmatched names</h2>
+  <ul>
+    {% for row in unmatched_employers %}<li>{{ row.name }}</li>{% else %}<li class="muted">None.</li>{% endfor %}
+  </ul>
+  <p><button class="primary" type="submit">Save company list</button></p>
+</form>
 <section class="panel">
   <h2>Commute radius</h2>
   <p class="muted">Each person’s commute review minutes are the radius. On-site and hybrid jobs farther than that limit are skipped on the next cycle. Jobs with no location are excluded. Edit the minutes on the person’s profile. Adzuna’s <code>distance_miles</code> setting is sent to that API in kilometres. USAJOBS <code>radius</code> stays in miles.</p>

@@ -40,6 +40,30 @@ People, titles, resume text, and search preferences are edited in the UI and sto
 
 API keys are saved from **Settings** into gitignored `config/secrets.yaml`. Deploys must not delete or replace that file (exclude it from `rsync --delete`). A non-blank environment variable or `.env` value overrides the file. If the secrets file has no value, JobAgent also reads `config/settings.yaml` `api:` and legacy `config/profile.yaml` `api:` (and `www/config/profile.yaml` if that file is still on disk). The first serve or Settings visit copies those into `config/secrets.yaml` without replacing a key already stored there. `jobagent doctor` prints which key *names* are set, never the values. Workday does not use an API key.
 
+## Employer discovery
+
+`discover-employers` turns company names into public job-board URLs. It does not scrape LinkedIn, does not read profiles, and does not use a logged-in session. It also does not submit applications.
+
+```bash
+python -m jobagent.cli discover-employers
+python -m jobagent.cli discover-employers --names-file config/employer_names.txt --delay 1
+python -m jobagent.cli discover-employers --near-home
+```
+
+Names come from the gitignored company list (`config/employer_names.txt`, edited on **Settings**), employers already stored on collected jobs, and, only with `--near-home`, one OpenStreetMap query around `search.location`. Greenhouse, Lever, Ashby, and SmartRecruiters do not publish a terms-cleared customer index, so discovery does not download a board dump. It generates 28 candidate patterns (compact, hyphen, underscore, and first-token slugs on those four APIs, plus Workday `wd1` / `wd5` / `wd3` with site names `External`, `Careers`, the compact name, and the Pascal name) and keeps a URL only when the official JSON API returns a job-board body. Requests are paced, `robots.txt` is honored, and misses are cached for 14 days.
+
+Confirmed boards are written to gitignored `config/discovered_boards.yaml`. Greenhouse, Lever, Ashby, SmartRecruiters, and Workday crawl the enabled rows in addition to the manual company list. Settings can turn a board off; a later discovery run does not turn it back on. See `config/employer_names.example.txt` and `config/discovered_boards.example.yaml`.
+
+## HigherEdJobs email alerts
+
+HigherEdJobs has no public search API. The official category RSS remains a separate source and is marked blocked when the site returns an HTML bot-check. Saved-search **email alerts** are optional:
+
+1. On HigherEdJobs, save the search and turn on the email alert.
+2. Create a mailbox that receives only those alerts, or forward the alerts into one.
+3. On **Settings → HigherEdJobs email alerts**, enter the IMAP host, folder, and sender filter. Username and password are stored in `config/secrets.yaml`, masked in the UI, and never written to logs. Leave a box blank to keep the saved value.
+
+The source badge is **not configured** until host, username, and password are set, **ok** when new listings are stored, and **no new alerts** when the mailbox has nothing new. The same job URL is not inserted twice. `jobagent doctor` reports only whether the mailbox is configured.
+
 The `data/` directory starts empty aside from `.gitkeep`. A fresh database is created by `init-db`. Do not commit `data/jobagent.db`.
 
 ## Optional import of the recovered legacy database

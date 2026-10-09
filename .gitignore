@@ -18,6 +18,8 @@ venv/
 !.env.example
 config/settings.yaml
 config/secrets.yaml
+config/employer_names.txt
+config/discovered_boards.yaml
 
 # Runtime data / personal information
 data/*

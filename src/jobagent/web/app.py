@@ -16,8 +16,10 @@ from jobagent import AUTO_APPLY_ENABLED, __version__
 from jobagent.config import (
     api_key_form_rows,
     ensure_secrets_file,
+    imap_form_view,
     load_settings,
     save_api_secrets,
+    save_imap_settings,
     save_scheduler_settings,
     scheduler_auto_apply,
     scheduler_dry_run,
@@ -977,6 +979,8 @@ def settings_page(request: Request):
             "api_keys": api_key_form_rows(),
             "secrets_path": str(secrets_file_path()),
             "source_rows": _source_rows(),
+            "imap": imap_form_view(),
+            **_employer_view(),
         },
     )
 
@@ -998,6 +1002,12 @@ def settings_save(
     key_google_maps_key: str = Form(""),
     key_anthropic_key: str = Form(""),
     key_mistral_key: str = Form(""),
+    imap_host: str = Form(""),
+    imap_port: str = Form(""),
+    imap_username: str = Form(""),
+    imap_password: str = Form(""),
+    imap_folder: str = Form(""),
+    imap_sender: str = Form(""),
 ):
     save_scheduler_settings(dry_run=_flag_on(dry_run), auto_apply=_flag_on(auto_apply))
     posted = {
@@ -1012,6 +1022,41 @@ def settings_save(
         "mistral_key": key_mistral_key,
     }
     save_api_secrets(posted)
+    save_imap_settings(
+        {
+            "host": imap_host,
+            "port": imap_port,
+            "username": imap_username,
+            "password": imap_password,
+            "folder": imap_folder,
+            "sender": imap_sender,
+        }
+    )
+    return RedirectResponse(url("/settings?msg=Saved"), status_code=303)
+
+
+def _employer_view() -> dict:
+    from jobagent.employers.boards import load_store, read_employer_names
+
+    store = load_store()
+    return {
+        "employer_names": read_employer_names(),
+        "discovered_boards": [row for row in store.get("boards") or [] if isinstance(row, dict)],
+        "unmatched_employers": [row for row in store.get("unmatched") or [] if isinstance(row, dict)],
+    }
+
+
+@app.post("/settings/employers")
+def save_employers(
+    employer_names: str = Form(""),
+    board_id: list[str] = Form([]),
+    board_enabled: list[str] = Form([]),
+):
+    from jobagent.employers.boards import set_enabled, write_employer_names
+
+    write_employer_names(employer_names)
+    if board_id:
+        set_enabled(set(board_enabled), board_id)
     return RedirectResponse(url("/settings?msg=Saved"), status_code=303)
 
 
