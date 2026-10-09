@@ -163,11 +163,17 @@ def llm_form_view(config: dict | None = None) -> dict[str, str]:
     if not model:
         model = model_for(cfg, "openrouter")
     limits = _limits(cfg)
+
+    def shown(value: float) -> str:
+        if value == int(value):
+            return str(int(value))
+        return str(value)
+
     return {
         "model": model,
         "providers": ", ".join(order),
-        "max_llm_calls": str(limits["calls"]),
-        "max_llm_seconds": str(int(limits["seconds"]) if limits["seconds"] == int(limits["seconds"]) else limits["seconds"]),
+        "max_llm_calls": shown(limits["calls"]),
+        "max_llm_seconds": shown(limits["seconds"]),
     }
 
 

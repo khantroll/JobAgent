@@ -236,6 +236,9 @@ def test_settings_saves_model_and_masks_openrouter_key(db_path, tmp_path, monkey
             follow_redirects=False,
         )
         assert saved.status_code == 303
+        again_page = client.get("/settings")
+        assert 'name="llm_max_calls" value="25"' in again_page.text
+        assert 'value="25.0"' not in again_page.text
     stored = yaml.safe_load(settings.read_text(encoding="utf-8"))
     assert stored["scheduler"]["dry_run"] is True
     assert stored["scheduler"]["auto_apply"] is False
