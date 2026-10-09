@@ -46,15 +46,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Directory for JSON migration reports",
     )
 
-    cycle = sub.add_parser("run-cycle", help="Run one dry-run crawl/rank/commute cycle")
+    cycle = sub.add_parser("run-cycle", help="Run one crawl/rank/commute cycle (respects scheduler.dry_run; does not submit)")
     cycle.add_argument("--candidate-id", type=int, default=None)
 
-    crawl = sub.add_parser("crawl", help="Dry-run discovery into the shared catalog (no apply)")
+    crawl = sub.add_parser("crawl", help="Discover jobs into the shared catalog (never submits)")
     crawl.add_argument(
         "--dry-run",
-        action="store_true",
-        default=True,
-        help="Accepted for clarity; discovery never submits applications",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Record this crawl as a dry run. Defaults to scheduler.dry_run. Never submits applications.",
     )
 
     rank = sub.add_parser("rank", help="Rank unscored matches per searching candidate")
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "crawl":
         from jobagent.discovery import run_discovery
 
-        summary = run_discovery(dry_run=True)
+        summary = run_discovery(dry_run=args.dry_run)
         print(json.dumps(summary, indent=2, default=str))
         return 0 if summary.get("ok", True) else 1
 

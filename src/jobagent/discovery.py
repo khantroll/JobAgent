@@ -12,7 +12,13 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from jobagent import AUTO_APPLY_ENABLED
-from jobagent.config import crawl_config_for_candidates, load_settings
+from jobagent.config import (
+    crawl_config_for_candidates,
+    load_settings,
+    scheduler_auto_apply,
+    scheduler_dry_run,
+    submission_allowed,
+)
 from jobagent.db import candidates as cand_repo
 from jobagent.db import init_db
 from jobagent.db import jobs as job_repo
@@ -68,17 +74,21 @@ def _run_one_source(name: str, crawl_fn, config: dict) -> SourceRun:
         )
 
 
-def run_discovery(*, dry_run: bool = True) -> dict[str, Any]:
-    """Crawl using the union of search-enabled candidate preferences."""
-    del dry_run  # alpha.2 discovery is always local-only
-    if AUTO_APPLY_ENABLED:
-        raise RuntimeError("Auto-apply must not run in 2.0.0-alpha.2")
+def run_discovery(*, dry_run: bool | None = None) -> dict[str, Any]:
+    """Crawl using the union of search-enabled candidate preferences.
+
+    dry_run records how the run is labeled. None uses scheduler.dry_run.
+    Discovery never submits applications.
+    """
     started = time.perf_counter()
     init_db()
     before_jobs = job_repo.count_jobs()
     before_matches = match_repo.count_all_matches()
     people = cand_repo.list_searching_candidates()
     base = load_settings()
+    effective_dry_run = scheduler_dry_run(base) if dry_run is None else bool(dry_run)
+    if submission_allowed(base):
+        raise RuntimeError("Auto-apply submission is not implemented; refusing to send applications.")
     config = crawl_config_for_candidates(people, base)
 
     results: list[SourceRun] = []
@@ -134,8 +144,10 @@ def run_discovery(*, dry_run: bool = True) -> dict[str, Any]:
     matches_created = after_matches - before_matches
     failures = [r for r in results if not r.ok]
     summary = {
-        "dry_run": True,
+        "dry_run": effective_dry_run,
+        "auto_apply_opt_in": scheduler_auto_apply(base),
         "auto_apply_enabled": AUTO_APPLY_ENABLED,
+        "submitted": False,
         "candidates_in_union": [
             {"id": p["id"], "name": p.get("name")} for p in people
         ],
@@ -160,7 +172,7 @@ def run_discovery(*, dry_run: bool = True) -> dict[str, Any]:
         applied=0,
         flagged=len(failures),
         errors="; ".join(f"{r.name}: {r.error}" for r in failures),
-        dry_run=True,
+        dry_run=effective_dry_run,
         summary=json.dumps(summary, default=str),
     )
     logger.info("Discovery complete — %s", {k: summary[k] for k in (

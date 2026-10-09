@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-from jobagent.paths import project_root, settings_path
+from jobagent.paths import config_dir, project_root, settings_path
 
 _ENV_API_KEYS = {
     "anthropic_key": "ANTHROPIC_API_KEY",
@@ -22,6 +22,61 @@ _ENV_API_KEYS = {
     "themuse_api_key": "THEMUSE_API_KEY",
     "google_maps_key": "GOOGLE_MAPS_KEY",
 }
+
+
+def as_bool(value: Any, default: bool) -> bool:
+    """Parse a settings flag. Missing values use default; only explicit values flip it."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return bool(int(value))
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def scheduler_dry_run(config: dict[str, Any] | None) -> bool:
+    """Dry-run defaults ON. A saved false is honored; it does not submit applications."""
+    scheduler = (config or {}).get("scheduler") or {}
+    if "dry_run" not in scheduler:
+        return True
+    return as_bool(scheduler.get("dry_run"), True)
+
+
+def scheduler_auto_apply(config: dict[str, Any] | None) -> bool:
+    """Auto-apply is a separate opt-in and stays OFF unless explicitly set true."""
+    scheduler = (config or {}).get("scheduler") or {}
+    if "auto_apply" not in scheduler:
+        return False
+    return as_bool(scheduler.get("auto_apply"), False)
+
+
+def submission_allowed(config: dict[str, Any] | None) -> bool:
+    """True only when dry-run is off, auto-apply was opted in, and a sender exists.
+
+    The sender switch stays off in this build, so this remains false even after
+    an explicit opt-in. Nothing in this process submits or emails.
+    """
+    from jobagent import AUTO_APPLY_ENABLED
+
+    if scheduler_dry_run(config):
+        return False
+    if not scheduler_auto_apply(config):
+        return False
+    return bool(AUTO_APPLY_ENABLED)
+
+
+def writable_settings_path() -> Path:
+    """Path the settings UI writes. Never the example file unless it was overridden."""
+    override = os.environ.get("JOBAGENT_SETTINGS_PATH", "").strip()
+    if override:
+        return Path(override)
+    return config_dir() / "settings.yaml"
 
 
 def load_settings(path: Path | None = None) -> dict[str, Any]:
@@ -40,9 +95,42 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
             api[dest] = value
     cfg["api"] = api
     scheduler = dict(cfg.get("scheduler") or {})
-    scheduler["dry_run"] = True
+    scheduler["dry_run"] = scheduler_dry_run({"scheduler": scheduler})
+    scheduler["auto_apply"] = scheduler_auto_apply({"scheduler": scheduler})
     cfg["scheduler"] = scheduler
     return cfg
+
+
+def save_scheduler_settings(*, dry_run: bool, auto_apply: bool) -> Path:
+    """Persist scheduler.dry_run and scheduler.auto_apply without writing secrets.
+
+    Reads the on-disk YAML (or the example as a seed) so environment API keys
+    that load_settings overlays are not copied into the file.
+    """
+    path = writable_settings_path()
+    data: dict[str, Any] = {}
+    if path.is_file():
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if isinstance(loaded, dict):
+            data = loaded
+    else:
+        example = config_dir() / "settings.example.yaml"
+        if not example.is_file():
+            example = project_root() / "config" / "settings.example.yaml"
+        if example.is_file() and example.resolve() != path.resolve():
+            loaded = yaml.safe_load(example.read_text(encoding="utf-8")) or {}
+            if isinstance(loaded, dict):
+                data = loaded
+    scheduler = dict(data.get("scheduler") or {})
+    scheduler["dry_run"] = bool(dry_run)
+    scheduler["auto_apply"] = bool(auto_apply)
+    data["scheduler"] = scheduler
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return path
 
 
 def candidate_runtime_config(candidate: dict, base: dict | None = None) -> dict[str, Any]:

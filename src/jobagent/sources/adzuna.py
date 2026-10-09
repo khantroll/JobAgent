@@ -19,6 +19,19 @@ from jobagent.sources.normalize import from_adzuna
 logger = logging.getLogger(__name__)
 
 BASE = "https://api.adzuna.com/v1/api/jobs"
+# Adzuna's `distance` parameter is kilometres. settings store miles.
+KM_PER_MILE = 1.60934
+
+
+def distance_km_from_miles(miles, default_miles: float = 50) -> int:
+    """Convert a miles radius into the kilometre value Adzuna expects."""
+    try:
+        value = float(miles)
+    except (TypeError, ValueError):
+        value = float(default_miles)
+    if value <= 0:
+        value = float(default_miles)
+    return max(1, int(round(value * KM_PER_MILE)))
 
 
 def crawl(config: dict) -> int:
@@ -36,7 +49,9 @@ def crawl(config: dict) -> int:
     filter_titles = title_filter_enabled(config, "adzuna", default=True)
     country = cfg.get("country", "us")
     where = cfg.get("where") or home_location(config)
-    distance = cfg.get("distance_miles", 50)
+    distance = distance_km_from_miles(cfg.get("distance_miles", 50))
+    if not str(where or "").strip():
+        logger.warning("[adzuna] no location — the API ignores distance and the radius is not applied")
     max_pages = int(cfg.get("max_pages", 2))
     results_per_page = min(int(cfg.get("results_per_page", 50)), 50)
     salary_min = config.get("search", {}).get("salary_min")

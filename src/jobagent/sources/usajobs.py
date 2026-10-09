@@ -74,7 +74,15 @@ def crawl(config: dict) -> int:
                 mapped = from_usajobs(item)
                 if not mapped:
                     continue
-                if not location_acceptable(mapped["location"], config, "usajobs"):
+                # Radius was already sent in miles. Do not drop neighboring-state
+                # hits with a city/state string match; commute measures drive time.
+                radius_scoped = bool(str(location or "").strip()) and radius > 0
+                if not location_acceptable(
+                    mapped["location"],
+                    config,
+                    "usajobs",
+                    radius_scoped=radius_scoped,
+                ):
                     continue
                 if insert_mapped(mapped):
                     total += 1
