@@ -27,6 +27,8 @@
     <label>Commute auto-apply minutes (eligibility only)<input type="number" name="commute_auto_apply_minutes" value="{{ search_defaults.commute_auto_apply_minutes }}"></label>
     <label>Commute review minutes<input type="number" name="commute_review_minutes" value="{{ search_defaults.commute_review_minutes }}"></label>
   </div>
+  <p class="muted">On-site and hybrid jobs farther than the review limit are skipped. Jobs with no location are excluded. A mention of remote desktop or “not remote” does not skip the distance check.</p>
+  <label><input type="hidden" name="location_accept_remote" value="0"><input type="checkbox" name="location_accept_remote" value="1" {% if search_defaults.location_accept_remote %}checked{% endif %}> Accept remote jobs</label>
   <label>Keywords, one per line<textarea name="keywords" rows="5">{{ search_defaults.keywords }}</textarea></label>
   <h2>HigherEdJobs RSS categories (per person)</h2>
   <label>Category IDs, one per line

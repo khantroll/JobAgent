@@ -101,33 +101,57 @@ def _home_location_tokens(config: dict) -> set[str]:
     return tokens
 
 
-def location_acceptable(location: str, config: dict, source_name: str = "") -> bool:
+def _token_in_location(token: str, location: str) -> bool:
+    """Match a home token as a word, not as a substring.
+
+    The state abbreviation "ar" must not match Newark, Charlotte, or Maryland.
+    """
+    if not token:
+        return False
+    pattern = rf"(?<![a-z]){re.escape(token)}(?![a-z])"
+    return re.search(pattern, location, re.IGNORECASE) is not None
+
+
+def location_acceptable(
+    location: str,
+    config: dict,
+    source_name: str = "",
+    *,
+    radius_scoped: bool = False,
+) -> bool:
     """
     True if a job location is worth keeping for this search profile.
-    Rejects obvious overseas postings; accepts remote/nationwide and home-area matches.
+
+    Blank locations are not inside the radius. Remote labels are kept when
+    remote is accepted. State abbreviations match as whole words.
+
+    radius_scoped is for boards that already applied a mile radius (USAJOBS).
+    Those hits are kept even when they sit in a neighboring state; the commute
+    check still measures drive time. Obvious overseas locations are still dropped.
     """
     if not location_filter_enabled(config, source_name):
         return True
     loc = (location or "").strip()
     if not loc:
-        return True
+        return False
 
     hay = f" {loc.lower()} "
-    if config.get("search", {}).get("location_accept_remote", True):
+    accept_remote = config.get("search", {}).get("location_accept_remote", True)
+    if accept_remote not in (0, "0", False, "false"):
         if any(sig in hay for sig in _REMOTE_LOCATION_SIGNALS):
             return True
 
     if any(marker in hay for marker in _FOREIGN_LOCATION_MARKERS):
         return False
 
+    if radius_scoped:
+        return True
+
     tokens = _home_location_tokens(config)
     if not tokens:
         return True
 
-    if any(token in hay for token in tokens):
-        return True
-
-    return False
+    return any(_token_in_location(token, loc) for token in tokens)
 
 
 @dataclass

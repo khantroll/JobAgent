@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% block body %}
+<h1>Settings</h1>
+{% if msg %}<p class="panel">{{ msg }}</p>{% endif %}
+<form class="panel form" method="post" action="{{ base }}/settings" hx-boost="false">
+  <h2>Dry run</h2>
+  <label>
+    <input type="hidden" name="dry_run" value="0">
+    <input id="dry-run" type="checkbox" name="dry_run" value="1" {% if dry_run %}checked{% endif %}>
+    Dry run
+  </label>
+  <p class="muted">On by default. Cycles are labeled as simulations and nothing is submitted. Unchecking this records later cycles as live. It does not apply to jobs or send email.</p>
+  <h2>Auto-apply</h2>
+  <label>
+    <input type="hidden" name="auto_apply" value="0">
+    <input id="auto-apply" type="checkbox" name="auto_apply" value="1" {% if auto_apply_opt_in %}checked{% endif %}>
+    Auto-apply opt-in
+  </label>
+  <p class="muted">Off unless you check this box. It is separate from dry run. This build does not submit applications or send messages even when both dry run is off and this box is checked. Eligibility on a match is not an application.</p>
+  <p><button class="primary" type="submit">Save settings</button></p>
+</form>
+<section class="panel">
+  <h2>Commute radius</h2>
+  <p class="muted">Each person’s commute review minutes are the radius. On-site and hybrid jobs farther than that limit are skipped on the next cycle. Jobs with no location are excluded. Edit the minutes on the person’s profile. Adzuna’s <code>distance_miles</code> setting is sent to that API in kilometres. USAJOBS <code>radius</code> stays in miles.</p>
+</section>
+{% endblock %}

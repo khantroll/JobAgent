@@ -3,6 +3,11 @@
   <div>
     <h1>Dashboard</h1>
     <p class="muted">Shared job catalog with per-candidate matches. Auto-apply is disabled in {{ version }}.</p>
+    {% if dry_run %}
+    <p class="panel"><strong>Dry run is on.</strong> Cycles are recorded as simulations and nothing is submitted. Change this in <a href="{{ base }}/settings">Settings</a>. Turning dry run off does not start applying.</p>
+    {% else %}
+    <p class="panel"><strong>Dry run is off.</strong> Cycles are recorded as live. Auto-apply is {{ 'opted in but still not sending' if auto_apply_opt_in else 'off' }} — nothing is submitted or emailed. <a href="{{ base }}/settings">Settings</a>.</p>
+    {% endif %}
     <p class="muted">The UI binds to 127.0.0.1 by default and must not be exposed on a public interface.</p>
     {% if selected %}
     <p>Match counts for <strong>{{ selected.name }}</strong> — {{ selected.location }}</p>
@@ -12,7 +17,7 @@
   </div>
   <form method="post" action="{{ base }}/run">
     {% if selected %}<input type="hidden" name="candidate_id" value="{{ selected.id }}">{% endif %}
-    <button class="primary" type="submit">Run dry-run cycle{% if selected %} for {{ selected.name }}{% endif %}</button>
+    <button class="primary" type="submit">Run {% if dry_run %}dry-run {% endif %}cycle{% if selected %} for {{ selected.name }}{% endif %}</button>
   </form>
   {% if run_error %}<p class="error">{{ run_error }}</p>{% endif %}
 </section>

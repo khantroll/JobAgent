@@ -13,6 +13,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from jobagent import AUTO_APPLY_ENABLED, __version__
+from jobagent.config import (
+    load_settings,
+    save_scheduler_settings,
+    scheduler_auto_apply,
+    scheduler_dry_run,
+)
 from jobagent import application_package as package_service
 from jobagent.db import candidates as cand_repo
 from jobagent.db import init_db
@@ -170,6 +176,9 @@ def _candidate_form_context(cand: dict | None, *, msg: str | None = None) -> dic
         "commute_auto_apply_minutes": (cand or {}).get("commute_auto_apply_minutes", 30),
         "commute_review_minutes": (cand or {}).get("commute_review_minutes", 90),
         "search_enabled": 1 if (cand is None or cand.get("search_enabled", 1) not in (0, "0")) else 0,
+        "location_accept_remote": 0
+        if cand is not None and cand.get("location_accept_remote") in (0, "0", False)
+        else 1,
     }
     return {
         "candidate": cand,
@@ -183,13 +192,27 @@ def _candidate_form_context(cand: dict | None, *, msg: str | None = None) -> dic
     }
 
 
+def _scheduler_view() -> dict:
+    try:
+        cfg = load_settings()
+    except Exception:
+        cfg = {}
+    return {
+        "dry_run": scheduler_dry_run(cfg),
+        "auto_apply_opt_in": scheduler_auto_apply(cfg),
+    }
+
+
 def _render(request: Request, name: str, context: dict | None = None):
     ctx = dict(context or {})
     expected = configured_token()
     cookie = request.cookies.get(COOKIE_NAME)
+    flags = _scheduler_view()
     ctx.setdefault("base", BASE_PATH)
     ctx.setdefault("version", __version__)
     ctx.setdefault("auto_apply_enabled", AUTO_APPLY_ENABLED)
+    ctx.setdefault("dry_run", flags["dry_run"])
+    ctx.setdefault("auto_apply_opt_in", flags["auto_apply_opt_in"])
     ctx.setdefault("auth_configured", bool(expected))
     ctx.setdefault(
         "ui_authenticated",
@@ -758,10 +781,12 @@ async def save_candidate(
     commute_auto_apply_minutes: str = Form("30"),
     commute_review_minutes: str = Form("90"),
     search_enabled: list[str] = Form([]),
+    location_accept_remote: list[str] = Form([]),
     resume_file: UploadFile | None = File(None),
 ):
     init_db()
     saved_file = ""
+    old = None
     upload_root = uploads_dir()
     if resume_file and resume_file.filename:
         safe_name = "".join(
@@ -776,6 +801,15 @@ async def save_candidate(
     elif candidate_id:
         old = cand_repo.get_candidate(candidate_id)
         saved_file = old.get("resume_file", "") if old else ""
+    if candidate_id and old is None:
+        old = cand_repo.get_candidate(candidate_id)
+
+    if location_accept_remote:
+        remote_flag = 1 if "1" in location_accept_remote else 0
+    elif old is not None and old.get("location_accept_remote") in (0, "0", False):
+        remote_flag = 0
+    else:
+        remote_flag = 1
 
     titles = titles_text.replace("\r", "").split("\n")
     employers = parse_employers(
@@ -804,6 +838,7 @@ async def save_candidate(
             "commute_auto_apply_minutes": _form_int(commute_auto_apply_minutes, 30),
             "commute_review_minutes": _form_int(commute_review_minutes, 90),
             "search_enabled": 1 if "1" in search_enabled else 0,
+            "location_accept_remote": remote_flag,
         },
         titles,
         employers,
@@ -873,6 +908,33 @@ def jobs_page(
             "statuses": sorted(match_repo.MATCH_STATUSES),
         },
     )
+
+
+@app.get("/settings")
+def settings_page(request: Request):
+    flags = _scheduler_view()
+    return _render(
+        request,
+        "settings.html",
+        {
+            "dry_run": flags["dry_run"],
+            "auto_apply_opt_in": flags["auto_apply_opt_in"],
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+def _flag_on(values: list[str]) -> bool:
+    return "1" in values
+
+
+@app.post("/settings")
+def settings_save(
+    dry_run: list[str] = Form([]),
+    auto_apply: list[str] = Form([]),
+):
+    save_scheduler_settings(dry_run=_flag_on(dry_run), auto_apply=_flag_on(auto_apply))
+    return RedirectResponse(url("/settings?msg=Saved"), status_code=303)
 
 
 @app.post("/run")

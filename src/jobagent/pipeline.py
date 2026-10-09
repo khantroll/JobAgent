@@ -14,7 +14,14 @@ import json
 import logging
 
 from jobagent import AUTO_APPLY_ENABLED
-from jobagent.config import candidate_runtime_config, crawl_config_for_candidates, load_settings
+from jobagent.config import (
+    candidate_runtime_config,
+    crawl_config_for_candidates,
+    load_settings,
+    scheduler_auto_apply,
+    scheduler_dry_run,
+    submission_allowed,
+)
 from jobagent.crawlers import run_all_crawlers
 from jobagent.commute import classify_job
 from jobagent.db import candidates as cand_repo
@@ -93,10 +100,10 @@ def run_candidate_cycle(candidate: dict, base_config: dict) -> dict:
             result["commute_note"],
         )
 
-    if AUTO_APPLY_ENABLED:
-        raise RuntimeError("Auto-apply must not run in 2.0.0-alpha.2")
+    if submission_allowed(config):
+        raise RuntimeError("Auto-apply submission is not implemented; refusing to send applications.")
     logger.info(
-        "[%s] Auto-apply disabled (alpha.2). %s match(es) marked eligible but not submitted.",
+        "[%s] Auto-apply did not run. %s match(es) marked eligible but not submitted.",
         name,
         eligible,
     )
@@ -115,6 +122,7 @@ def run_rank(*, candidate_id: int | None = None) -> dict:
     logger.info("Starting ranking-only pass (auto-apply disabled)")
     init_db()
     base_config = load_settings()
+    dry_run = scheduler_dry_run(base_config)
     if candidate_id is not None:
         person = cand_repo.get_candidate(candidate_id)
         if not person:
@@ -122,7 +130,14 @@ def run_rank(*, candidate_id: int | None = None) -> dict:
         people = [person]
     else:
         people = cand_repo.list_searching_candidates()
-    totals = {"ranked": 0, "candidates": len(people), "applied": 0, "dry_run": True}
+    totals = {
+        "ranked": 0,
+        "candidates": len(people),
+        "applied": 0,
+        "dry_run": dry_run,
+        "auto_apply_opt_in": scheduler_auto_apply(base_config),
+        "auto_apply_enabled": AUTO_APPLY_ENABLED,
+    }
     for candidate in people:
         result = run_candidate_cycle(candidate, base_config)
         totals["ranked"] += result["ranked"]
@@ -132,9 +147,15 @@ def run_rank(*, candidate_id: int | None = None) -> dict:
 
 def run_cycle(*, candidate_id: int | None = None) -> dict:
     logger.info("=" * 60)
-    logger.info("Starting dry-run job search cycle (auto-apply disabled)")
     init_db()
     base_config = load_settings()
+    dry_run = scheduler_dry_run(base_config)
+    auto_apply_opt_in = scheduler_auto_apply(base_config)
+    logger.info(
+        "Starting job search cycle (dry_run=%s, auto_apply_opt_in=%s, submission=off)",
+        dry_run,
+        auto_apply_opt_in,
+    )
     if candidate_id is not None:
         person = cand_repo.get_candidate(candidate_id)
         if not person:
@@ -177,8 +198,10 @@ def run_cycle(*, candidate_id: int | None = None) -> dict:
         "flagged_review": total_flagged,
         "skipped_commute": total_skipped,
         "auto_apply_eligible": total_eligible,
-        "dry_run": True,
+        "dry_run": dry_run,
+        "auto_apply_opt_in": auto_apply_opt_in,
         "auto_apply_enabled": AUTO_APPLY_ENABLED,
+        "submitted": False,
         "candidates": len(people),
     }
     run_repo.log_run(
@@ -188,7 +211,7 @@ def run_cycle(*, candidate_id: int | None = None) -> dict:
         applied=0,
         flagged=total_flagged,
         errors="; ".join(errors),
-        dry_run=True,
+        dry_run=dry_run,
         candidate_id=candidate_id,
         summary=json.dumps(summary),
     )

@@ -93,5 +93,9 @@ llm:
 scheduler:
   run_every_hours: 4
   max_rank_per_run: 50
-  # Alpha.2 is dry-run only. Auto-apply is disabled in code regardless of this flag.
+  # Dry run defaults on and is editable in the Settings page. Turning it off
+  # records cycles as live; it does not submit applications or send mail.
   dry_run: true
+  # Separate opt-in. Stays off unless set true. The application sender is not
+  # enabled by this flag.
+  auto_apply: false

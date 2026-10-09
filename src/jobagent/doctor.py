@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from jobagent import AUTO_APPLY_ENABLED, __version__
-from jobagent.config import _ENV_API_KEYS, load_settings
+from jobagent.config import _ENV_API_KEYS, load_settings, scheduler_auto_apply, scheduler_dry_run
 from jobagent.paths import project_root, settings_path
 from jobagent.web.auth import api_token_configured
 
@@ -49,6 +49,8 @@ def collect_report() -> dict[str, Any]:
             "run_history": None,
         },
         "auto_apply_enabled": AUTO_APPLY_ENABLED,
+        "dry_run": None,
+        "auto_apply_opt_in": None,
         "auth_configured": api_token_configured(),
         "ui_bind_default": "127.0.0.1",
         "settings_path": None,
@@ -68,6 +70,8 @@ def collect_report() -> dict[str, Any]:
     try:
         cfg = load_settings(cfg_path)
         report["settings_ok"] = True
+        report["dry_run"] = scheduler_dry_run(cfg)
+        report["auto_apply_opt_in"] = scheduler_auto_apply(cfg)
         sources = cfg.get("sources") or {}
         report["configured_sources"] = sorted(sources.keys())
         report["enabled_sources"] = sorted(
@@ -132,7 +136,9 @@ def format_report(report: dict[str, Any]) -> str:
         f"  candidates:   {report['counts']['candidates']}",
         f"  matches:      {report['counts']['matches']}",
         f"  run_history:  {report['counts']['run_history']}",
-        f"  auto-apply:   {'ENABLED (invalid for alpha.2)' if report['auto_apply_enabled'] else 'disabled'}",
+        f"  dry-run:      {report.get('dry_run')}",
+        f"  auto-apply opt-in: {report.get('auto_apply_opt_in')}",
+        f"  auto-apply sender: {'ENABLED (invalid)' if report['auto_apply_enabled'] else 'disabled'}",
         f"  UI/API auth:  {'configured' if report['auth_configured'] else 'not configured (local open)'}",
         f"  UI bind:      {report.get('ui_bind_default', '127.0.0.1')} default — do not expose publicly",
         f"  settings:     {report['settings_path']} ({'ok' if report['settings_ok'] else 'ERROR'})",

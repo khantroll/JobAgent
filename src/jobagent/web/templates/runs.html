@@ -1,7 +1,8 @@
 {% extends "base.html" %}{% block body %}
 <section class="hero">
   <h1>Runs</h1>
-  <form method="post" action="{{ base }}/run"><button class="primary">Run dry-run cycle</button></form>
+  <form method="post" action="{{ base }}/run"><button class="primary">Run {% if dry_run %}dry-run {% endif %}cycle</button></form>
+  <p class="muted">{% if dry_run %}Dry run is on — this cycle will not submit applications.{% else %}Dry run is off. Auto-apply stays a separate opt-in and this button still does not submit applications.{% endif %} <a href="{{ base }}/settings">Settings</a>.</p>
 </section>
 <section class="panel">
   <h2>Live UI-triggered runs</h2>
