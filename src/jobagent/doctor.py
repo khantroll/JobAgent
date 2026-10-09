@@ -10,6 +10,7 @@ from typing import Any
 from jobagent import AUTO_APPLY_ENABLED, __version__
 from jobagent.config import (
     _ENV_API_KEYS,
+    imap_configured,
     load_settings,
     scheduler_auto_apply,
     scheduler_dry_run,
@@ -66,6 +67,7 @@ def collect_report() -> dict[str, Any]:
         "api_keys_present": {},
         "secrets_path": str(secrets_file_path()),
         "secrets_file_exists": secrets_file_path().is_file(),
+        "higheredjobs_mail_configured": imap_configured(),
         "warnings": warnings,
         "errors": errors,
     }
@@ -154,6 +156,7 @@ def format_report(report: dict[str, Any]) -> str:
         f"  keys present: {', '.join(present) or '(none)'}",
         f"  keys missing: {', '.join(missing) or '(none)'}",
         f"  secrets file: {report.get('secrets_path')} ({'present' if report.get('secrets_file_exists') else 'absent'})",
+        f"  HEJ mailbox:  {'configured' if report.get('higheredjobs_mail_configured') else 'not configured'}",
         f"  status:       {'ok' if report['ok'] else 'PROBLEMS FOUND'}",
     ]
     for warning in report.get("warnings") or []:

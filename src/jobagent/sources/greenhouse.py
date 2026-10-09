@@ -26,7 +26,12 @@ def crawl(config: dict) -> int:
         return 0
 
     cfg = source_cfg(config, "greenhouse")
-    companies = cfg.get("companies") or config.get("search", {}).get("greenhouse_companies", [])
+    from jobagent.employers.boards import slugs_for
+
+    companies = slugs_for(
+        "greenhouse",
+        cfg.get("companies") or config.get("search", {}).get("greenhouse_companies", []),
+    )
     if not companies:
         logger.info("[greenhouse] no companies configured")
         return 0

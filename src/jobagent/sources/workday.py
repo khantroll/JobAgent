@@ -427,7 +427,9 @@ def crawl(config: dict) -> int:
         return 0
 
     cfg = source_cfg(config, "workday")
-    companies = cfg.get("companies") or []
+    from jobagent.employers.boards import workday_entries
+
+    companies = workday_entries(cfg.get("companies") or [])
     if not companies:
         logger.info("[workday] no companies configured")
         return 0

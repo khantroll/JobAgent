@@ -255,9 +255,9 @@ def ensure_secrets_file() -> Path:
     return path
 
 
-def _write_secrets(path: Path, api: dict[str, str]) -> None:
+def _dump_secrets(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    body = yaml.safe_dump({"api": api}, sort_keys=False, allow_unicode=True)
+    body = yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
     header = (
         "# JobAgent API keys. Gitignored. Do not commit this file.\n"
         "# Deploys and updates must not replace it. A non-blank environment\n"
@@ -268,6 +268,91 @@ def _write_secrets(path: Path, api: dict[str, str]) -> None:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def _write_secrets(path: Path, api: dict[str, str]) -> None:
+    data = _read_yaml_mapping(path)
+    data["api"] = api
+    _dump_secrets(path, data)
+
+
+_IMAP_ENV = {
+    "host": "HEJ_IMAP_HOST",
+    "username": "HEJ_IMAP_USERNAME",
+    "password": "HEJ_IMAP_PASSWORD",
+    "folder": "HEJ_IMAP_FOLDER",
+    "sender": "HEJ_IMAP_SENDER",
+}
+
+
+def load_imap_settings() -> dict[str, Any]:
+    """HigherEdJobs alert mailbox. Password and username are never logged here."""
+    _fill_blank_env_from_dotenv()
+    data = _read_yaml_mapping(secrets_file_path())
+    imap = dict(data.get("imap") or {}) if isinstance(data.get("imap"), dict) else {}
+    resolved: dict[str, Any] = {
+        "host": str(imap.get("host") or "").strip(),
+        "port": int(imap.get("port") or 993),
+        "username": str(imap.get("username") or "").strip(),
+        "password": str(imap.get("password") or "").strip(),
+        "folder": str(imap.get("folder") or "INBOX").strip() or "INBOX",
+        "sender": str(imap.get("sender") or "higheredjobs.com").strip() or "higheredjobs.com",
+    }
+    for dest, env_name in _IMAP_ENV.items():
+        value = os.environ.get(env_name, "").strip()
+        if credential_usable(value):
+            resolved[dest] = value
+    port_env = os.environ.get("HEJ_IMAP_PORT", "").strip()
+    if port_env.isdigit():
+        resolved["port"] = int(port_env)
+    return resolved
+
+
+def imap_configured(settings: dict[str, Any] | None = None) -> bool:
+    cfg = settings if settings is not None else load_imap_settings()
+    return bool(credential_usable(cfg.get("host")) and credential_usable(cfg.get("username")) and credential_usable(cfg.get("password")))
+
+
+def save_imap_settings(updates: dict[str, str]) -> Path:
+    """Persist non-blank mailbox fields. A blank field keeps the stored value."""
+    path = secrets_file_path()
+    data = _read_yaml_mapping(path)
+    imap = dict(data.get("imap") or {}) if isinstance(data.get("imap"), dict) else {}
+    changed = False
+    for field in ("host", "username", "password", "folder", "sender"):
+        text = str(updates.get(field) or "").strip()
+        if not credential_usable(text):
+            continue
+        imap[field] = text
+        changed = True
+    port_text = str(updates.get("port") or "").strip()
+    if port_text.isdigit():
+        imap["port"] = int(port_text)
+        changed = True
+    if not changed:
+        return path
+    data["imap"] = imap
+    data.setdefault("api", data.get("api") or {})
+    _dump_secrets(path, data)
+    return path
+
+
+def imap_form_view() -> dict[str, Any]:
+    """Settings display. Username and password are masked; the raw values are omitted."""
+    cfg = load_imap_settings()
+    username = str(cfg.get("username") or "")
+    password = str(cfg.get("password") or "")
+    return {
+        "host": str(cfg.get("host") or ""),
+        "port": int(cfg.get("port") or 993),
+        "folder": str(cfg.get("folder") or "INBOX"),
+        "sender": str(cfg.get("sender") or "higheredjobs.com"),
+        "username_configured": credential_usable(username),
+        "password_configured": credential_usable(password),
+        "username_masked": mask_secret(username) if credential_usable(username) else "",
+        "password_masked": mask_secret(password) if credential_usable(password) else "",
+        "configured": imap_configured(cfg),
+    }
 
 
 def save_api_secrets(updates: dict[str, str]) -> Path:

@@ -1,0 +1,5 @@
+# One company name per line, or a CSV whose first column is the name.
+# Copy to config/employer_names.txt (gitignored) or paste the names on Settings.
+# Discovery does not scrape LinkedIn and does not use a logged-in session.
+Northwind Traders
+Summit Ridge Holdings

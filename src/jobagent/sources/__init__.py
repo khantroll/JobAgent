@@ -7,11 +7,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import (
     adzuna,
+    ashby,
     greenhouse,
     higheredjobs,
+    higheredjobs_mail,
     jsearch,
     lever,
     remotive,
+    smartrecruiters,
     themuse,
     usajobs,
     workday,
@@ -26,6 +29,8 @@ STATUS_LABELS = {
     "no_results": "no results",
     "disabled": "disabled",
     "error": "error",
+    "not_configured": "not configured",
+    "no_new_alerts": "no new alerts",
 }
 
 
@@ -61,14 +66,35 @@ def source_skip_reason(name: str, config: dict) -> str | None:
         if not agent:
             return "missing USAJOBS_USER_AGENT"
     elif name == "greenhouse":
-        if not (cfg.get("companies") or (config.get("search") or {}).get("greenhouse_companies")):
+        from jobagent.employers.boards import slugs_for
+
+        if not slugs_for("greenhouse", cfg.get("companies") or (config.get("search") or {}).get("greenhouse_companies")):
             return "no greenhouse companies configured"
     elif name == "lever":
-        if not (cfg.get("companies") or (config.get("search") or {}).get("lever_companies")):
+        from jobagent.employers.boards import slugs_for
+
+        if not slugs_for("lever", cfg.get("companies") or (config.get("search") or {}).get("lever_companies")):
             return "no lever companies configured"
     elif name == "workday":
-        if not (cfg.get("companies") or []):
+        from jobagent.employers.boards import workday_entries
+
+        if not workday_entries(cfg.get("companies") or []):
             return "no workday companies configured"
+    elif name == "ashby":
+        from jobagent.employers.boards import slugs_for
+
+        if not slugs_for("ashby", cfg.get("companies") or []):
+            return "no ashby companies configured"
+    elif name == "smartrecruiters":
+        from jobagent.employers.boards import slugs_for
+
+        if not slugs_for("smartrecruiters", cfg.get("companies") or []):
+            return "no smartrecruiters companies configured"
+    elif name == "higheredjobs_mail":
+        from jobagent.config import imap_configured
+
+        if not imap_configured():
+            return "not configured"
     return None
 
 
@@ -77,6 +103,8 @@ def classify_skip(reason: str | None) -> str:
     text = (reason or "").strip().lower()
     if text.startswith("missing "):
         return "missing_key"
+    if "not configured" in text:
+        return "not_configured"
     if "disabled" in text:
         return "disabled"
     return "blocked"
@@ -95,6 +123,8 @@ def annotate_source_result(
     blocked: bool = False,
     block_reason: str = "",
     elapsed_seconds: float = 0.0,
+    status_override: str = "",
+    status_detail: str = "",
 ) -> dict:
     """One log line and a status record. Never includes credential values."""
     if error:
@@ -103,6 +133,9 @@ def annotate_source_result(
     elif skipped_reason and not attempted:
         status = classify_skip(skipped_reason)
         detail = skipped_reason
+    elif status_override:
+        status = status_override
+        detail = status_detail or status_override
     elif blocked and inserted == 0 and seen == 0:
         status = "blocked"
         detail = block_reason or "blocked"
@@ -145,7 +178,7 @@ def source_status_rows(config: dict, last_runs: dict | None = None) -> list[dict
             live = "disabled"
             skip = skip or "disabled in settings"
         last = previous.get(name) or {}
-        if live in {"missing_key", "disabled"}:
+        if live in {"missing_key", "disabled", "not_configured"}:
             status = live
             detail = skip or STATUS_LABELS[live]
         elif live == "blocked" and not last:
@@ -190,8 +223,11 @@ SOURCES = [
     (jsearch, "jsearch"),
     (themuse, "themuse"),
     (higheredjobs, "higheredjobs"),
+    (higheredjobs_mail, "higheredjobs_mail"),
     (greenhouse, "greenhouse"),
     (lever, "lever"),
+    (ashby, "ashby"),
+    (smartrecruiters, "smartrecruiters"),
     (workday, "workday"),
 ]
 
@@ -219,6 +255,8 @@ def _execute_source(name: str, crawl_fn, config: dict) -> dict:
             blocked=counters.blocked,
             block_reason=counters.block_reason,
             elapsed_seconds=round(time.perf_counter() - started, 3),
+            status_override=counters.status_override,
+            status_detail=counters.status_detail,
         )
         record["returned"] = int(returned) if isinstance(returned, int) else counters.inserted
         return record

@@ -76,6 +76,14 @@ sources:
       - wachter
       - entrata
       - kinsta
+  ashby:
+    enabled: true
+    companies: []
+  smartrecruiters:
+    enabled: true
+    companies: []
+  higheredjobs_mail:
+    enabled: true
   workday:
     enabled: true
     filter_by_titles: true

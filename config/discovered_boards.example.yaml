@@ -1,0 +1,5 @@
+# Shape only. The live file is config/discovered_boards.yaml and is gitignored.
+# discover-employers writes confirmed rows. Settings can set enabled: false.
+# Deploys must not replace the live file.
+boards: []
+unmatched: []

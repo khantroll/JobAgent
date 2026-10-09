@@ -73,6 +73,8 @@ def _run_one_source(name: str, crawl_fn, config: dict) -> SourceRun:
                 blocked=counters.blocked,
                 block_reason=counters.block_reason,
                 elapsed_seconds=round(time.perf_counter() - started, 3),
+                status_override=counters.status_override,
+                status_detail=counters.status_detail,
             )
         )
     except Exception as exc:

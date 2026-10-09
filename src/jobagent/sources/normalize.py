@@ -241,3 +241,45 @@ def from_workday_posting(item: dict[str, Any], *, company: str, url: str) -> dic
         source="workday",
         posted_at=item.get("postedOn") or "",
     )
+
+
+def from_ashby(job: dict[str, Any], slug: str) -> dict[str, str] | None:
+    location = job.get("location") or ""
+    if isinstance(location, dict):
+        location = location.get("locationName") or location.get("name") or ""
+    return catalog_job(
+        title=job.get("title") or "",
+        company=job.get("organizationName") or slug,
+        location=str(location),
+        url=job.get("jobUrl") or job.get("applyUrl") or "",
+        description=_clean_html(job.get("descriptionHtml") or job.get("descriptionPlain") or ""),
+        source="ashby",
+        posted_at=job.get("publishedAt") or "",
+    )
+
+
+def from_smartrecruiters(job: dict[str, Any], slug: str) -> dict[str, str] | None:
+    location = job.get("location") or {}
+    if isinstance(location, dict):
+        loc = ", ".join(
+            part
+            for part in (location.get("city"), location.get("region"), location.get("country"))
+            if part
+        )
+    else:
+        loc = str(location)
+    job_id = str(job.get("id") or "").strip()
+    url = job.get("ref") or ""
+    if isinstance(url, dict):
+        url = url.get("jobAd") or ""
+    if not url and job_id:
+        url = f"https://jobs.smartrecruiters.com/{slug}/{job_id}"
+    return catalog_job(
+        title=job.get("name") or "",
+        company=(job.get("company") or {}).get("name") if isinstance(job.get("company"), dict) else slug,
+        location=loc,
+        url=str(url),
+        description=job.get("name") or "",
+        source="smartrecruiters",
+        posted_at=job.get("releasedDate") or "",
+    )
