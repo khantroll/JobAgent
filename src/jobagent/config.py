@@ -11,6 +11,7 @@ import yaml
 from jobagent.paths import config_dir, project_root, settings_path
 
 _ENV_API_KEYS = {
+    "openrouter_key": "OPENROUTER_API_KEY",
     "anthropic_key": "ANTHROPIC_API_KEY",
     "mistral_key": "MISTRAL_API_KEY",
     "adzuna_app_id": "ADZUNA_APP_ID",
@@ -74,18 +75,25 @@ API_KEY_FIELDS: tuple[dict[str, str], ...] = (
         "hint": "Optional. Drive-time lookups. OSRM is used when this is empty.",
     },
     {
+        "dest": "openrouter_key",
+        "env": "OPENROUTER_API_KEY",
+        "label": "OpenRouter API key",
+        "source": "Ranking",
+        "hint": "Optional. OpenRouter is the default ranking provider. The model defaults to openrouter/free.",
+    },
+    {
         "dest": "anthropic_key",
         "env": "ANTHROPIC_API_KEY",
         "label": "Anthropic API key",
         "source": "Ranking",
-        "hint": "Optional. Used only when llm.provider is anthropic.",
+        "hint": "Optional. Used when anthropic is in the provider list and this key is set.",
     },
     {
         "dest": "mistral_key",
         "env": "MISTRAL_API_KEY",
         "label": "Mistral API key",
         "source": "Ranking",
-        "hint": "Optional. Used only when llm.provider is mistral.",
+        "hint": "Optional. Used when mistral is in the provider list and this key is set.",
     },
 )
 
@@ -482,6 +490,81 @@ def load_settings(path: Path | None = None) -> dict[str, Any]:
     scheduler["auto_apply"] = scheduler_auto_apply({"scheduler": scheduler})
     cfg["scheduler"] = scheduler
     return cfg
+
+
+def load_api_token() -> str:
+    """UI/API token from the environment, then config/secrets.yaml. Never logged."""
+    env = os.environ.get("JOB_AGENT_API_TOKEN", "").strip()
+    if credential_usable(env):
+        return env
+    data = _read_yaml_mapping(secrets_file_path())
+    candidates = [data.get("api_token")]
+    auth = data.get("auth")
+    if isinstance(auth, dict):
+        candidates.append(auth.get("token"))
+    for value in candidates:
+        if credential_usable(value):
+            return str(value).strip()
+    return ""
+
+
+def _settings_document(path: Path) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    if path.is_file():
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if isinstance(loaded, dict):
+            data = loaded
+        return data
+    example = config_dir() / "settings.example.yaml"
+    if not example.is_file():
+        example = project_root() / "config" / "settings.example.yaml"
+    if example.is_file() and example.resolve() != path.resolve():
+        loaded = yaml.safe_load(example.read_text(encoding="utf-8")) or {}
+        if isinstance(loaded, dict):
+            data = loaded
+    return data
+
+
+def save_llm_settings(
+    *,
+    model: str = "",
+    providers: str = "",
+    max_calls: str = "",
+    max_seconds: str = "",
+) -> Path:
+    """Persist ranking model and caps. Blank fields keep the stored values."""
+    path = writable_settings_path()
+    model = str(model or "").strip()
+    providers = str(providers or "").strip()
+    max_calls = str(max_calls or "").strip()
+    max_seconds = str(max_seconds or "").strip()
+    if not any((model, providers, max_calls, max_seconds)):
+        return path
+    data = _settings_document(path)
+    llm = dict(data.get("llm") or {})
+    if model:
+        llm["model"] = model
+        models = dict(llm.get("models") or {}) if isinstance(llm.get("models"), dict) else {}
+        models["openrouter"] = model
+        llm["models"] = models
+        llm.setdefault("provider", "openrouter")
+    if providers:
+        names: list[str] = []
+        for part in providers.replace("\n", ",").split(","):
+            name = part.strip().lower()
+            if name and name not in names:
+                names.append(name)
+        if names:
+            llm["providers"] = names
+            llm["provider"] = names[0]
+    if max_calls.isdigit():
+        llm["max_llm_calls"] = int(max_calls)
+    if max_seconds.isdigit():
+        llm["max_llm_seconds"] = int(max_seconds)
+    data["llm"] = llm
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return path
 
 
 def save_scheduler_settings(*, dry_run: bool, auto_apply: bool) -> Path:

@@ -116,7 +116,7 @@ python -m jobagent.cli evaluate
 python -m jobagent.cli evaluate --json
 ```
 
-Crawl never submits applications. Rank uses Mistral/Anthropic when keys are present, otherwise a deterministic heuristic (or `llm.provider: mock`). Evaluate does not modify the database.
+Crawl never submits applications. Rank calls an LLM only for matches that are not already a commute skip, highest-value matches first. The default provider is OpenRouter (`openrouter/free`, key `OPENROUTER_API_KEY` or `api.openrouter_key` in `config/secrets.yaml`). The model and provider order are on Settings. A 429 waits for a bounded Retry-After (default cap 8 seconds), retries once, then that provider cools down (default 120 seconds) and the next configured provider with a key is used. Each cycle stops after 40 LLM calls or 90 seconds, whichever comes first, and scores the rest with keywords. One log line records calls, rate limits, failovers, and fallbacks. `llm.provider: mock` stays local. Evaluate does not modify the database.
 
 Alpha.3 adds a human-reviewed **application package** step: from an approved match, choose **Build package** to generate candidate/job-specific resume and cover-letter drafts, edit them in the UI, and save the reviewed text. It still never submits an application. Alpha.2 discovery/ranking recipe: `docs/JOBAGENT_2_ALPHA2.md`. Source status: `docs/SOURCE_STATUS.md`.
 
@@ -127,7 +127,9 @@ python -m jobagent.cli run-cycle
 python -m jobagent.cli run-cycle --candidate-id 1
 ```
 
-Each cycle crawls into the shared catalog, then ranks and evaluates commute **per candidate**. Auto-apply never runs.
+Each cycle crawls into the shared catalog, classifies commute, then ranks **per candidate**. Auto-apply never runs. Commute skips are keyword-scored and do not use the LLM cap.
+
+The UI/API token is `JOB_AGENT_API_TOKEN` or `api_token` in gitignored `config/secrets.yaml`. Do not pass it as a `run-cycle` argument. `--api-token` and `--token` still work so an old unit does not crash, and they log a warning, but the value shows up in process listings. A systemd timer should use `Environment=` or `EnvironmentFile=` (see `deploy/jobagent-cycle.service`) and must not put the token in `ExecStart`.
 
 ## Doctor
 

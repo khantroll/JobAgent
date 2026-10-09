@@ -1,4 +1,4 @@
-"""Alpha.1 auth: a single shared token from the environment.
+"""Alpha.1 auth: a single shared token from the environment or secrets file.
 
 No user accounts. If JOB_AGENT_API_TOKEN is unset, API and UI stay open for
 local development. If it is set, the REST API requires a Bearer token and the
@@ -7,7 +7,6 @@ HTML UI requires a login cookie.
 from __future__ import annotations
 
 import hmac
-import os
 
 from fastapi import Header, HTTPException, Request, status
 
@@ -15,7 +14,10 @@ COOKIE_NAME = "jobagent_token"
 
 
 def configured_token() -> str:
-    return os.environ.get("JOB_AGENT_API_TOKEN", "").strip()
+    """Token from JOB_AGENT_API_TOKEN or config/secrets.yaml. Never from the command line."""
+    from jobagent.config import load_api_token
+
+    return load_api_token()
 
 
 def api_token_configured() -> bool:

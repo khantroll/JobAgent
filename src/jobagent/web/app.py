@@ -20,6 +20,7 @@ from jobagent.config import (
     load_settings,
     save_api_secrets,
     save_imap_settings,
+    save_llm_settings,
     save_scheduler_settings,
     scheduler_auto_apply,
     scheduler_dry_run,
@@ -33,6 +34,7 @@ from jobagent.db import matches as match_repo
 from jobagent.db import applications as application_repo
 from jobagent.db import runs as run_repo
 from jobagent.paths import uploads_dir
+from jobagent.llm import llm_form_view
 from jobagent.web import worker
 from jobagent.web.auth import (
     COOKIE_NAME,
@@ -980,6 +982,7 @@ def settings_page(request: Request):
             "secrets_path": str(secrets_file_path()),
             "source_rows": _source_rows(),
             "imap": imap_form_view(),
+            "llm": llm_form_view(load_settings()),
             **_employer_view(),
         },
     )
@@ -1001,7 +1004,12 @@ def settings_save(
     key_themuse_api_key: str = Form(""),
     key_google_maps_key: str = Form(""),
     key_anthropic_key: str = Form(""),
+    key_openrouter_key: str = Form(""),
     key_mistral_key: str = Form(""),
+    llm_model: str = Form(""),
+    llm_providers: str = Form(""),
+    llm_max_calls: str = Form(""),
+    llm_max_seconds: str = Form(""),
     imap_host: str = Form(""),
     imap_port: str = Form(""),
     imap_username: str = Form(""),
@@ -1018,10 +1026,17 @@ def settings_save(
         "usajobs_user_agent": key_usajobs_user_agent,
         "themuse_api_key": key_themuse_api_key,
         "google_maps_key": key_google_maps_key,
+        "openrouter_key": key_openrouter_key,
         "anthropic_key": key_anthropic_key,
         "mistral_key": key_mistral_key,
     }
     save_api_secrets(posted)
+    save_llm_settings(
+        model=llm_model,
+        providers=llm_providers,
+        max_calls=llm_max_calls,
+        max_seconds=llm_max_seconds,
+    )
     save_imap_settings(
         {
             "host": imap_host,

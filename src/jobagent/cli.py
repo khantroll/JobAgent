@@ -4,10 +4,28 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
 from jobagent import __version__
+
+
+def _accept_deprecated_api_token(value: str | None) -> None:
+    """Honor a legacy flag without printing the token. Prefer the environment or secrets file."""
+    text = str(value or "").strip()
+    if not text:
+        return
+    logging.getLogger("jobagent.cli").warning(
+        "run-cycle was passed --api-token/--token. That flag is deprecated because the token "
+        "is visible in process listings. Remove it from the systemd unit. Set JOB_AGENT_API_TOKEN "
+        "or api_token in config/secrets.yaml."
+    )
+    from jobagent.config import load_api_token
+
+    if load_api_token():
+        return
+    os.environ["JOB_AGENT_API_TOKEN"] = text
 
 
 def _configure_logging() -> None:
@@ -48,6 +66,16 @@ def main(argv: list[str] | None = None) -> int:
 
     cycle = sub.add_parser("run-cycle", help="Run one crawl/rank/commute cycle (respects scheduler.dry_run; does not submit)")
     cycle.add_argument("--candidate-id", type=int, default=None)
+    cycle.add_argument(
+        "--api-token",
+        "--token",
+        dest="api_token",
+        default=None,
+        help=(
+            "Deprecated. The value is visible in process listings. "
+            "Set JOB_AGENT_API_TOKEN or api_token in config/secrets.yaml instead."
+        ),
+    )
 
     crawl = sub.add_parser("crawl", help="Discover jobs into the shared catalog (never submits)")
     crawl.add_argument(
@@ -134,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "run-cycle":
         from jobagent.pipeline import run_cycle
 
+        _accept_deprecated_api_token(getattr(args, "api_token", None))
         summary = run_cycle(candidate_id=args.candidate_id)
         print(json.dumps(summary, indent=2, default=str))
         return 0

@@ -28,6 +28,7 @@ from jobagent.db import candidates as cand_repo
 from jobagent.db import matches as match_repo
 from jobagent.db import runs as run_repo
 from jobagent.db import init_db
+from jobagent.llm import begin_llm_cycle, log_llm_cycle_summary
 from jobagent.ranking import run_ranking
 
 logger = logging.getLogger("jobagent.pipeline")
@@ -46,18 +47,69 @@ def run_candidate_cycle(candidate: dict, base_config: dict) -> dict:
 
     unscored = match_repo.get_unscored_matches(cid)
     ranked = 0
+    skipped_commute = 0
+    reviewed = 0
+    eligible = 0
+    prepared: list[dict] = []
     if unscored:
         to_rank = unscored[:max_rank]
         logger.info("[%s] Ranking %s/%s unscored matches", name, len(to_rank), len(unscored))
-        run_ranking(to_rank, config, candidate_id=cid)
-        ranked = len(to_rank)
+        for row in to_rank:
+            job = dict(row)
+            already = bool(job.get("work_type"))
+            if not already:
+                try:
+                    commute = classify_job(job, config)
+                except Exception as exc:
+                    logger.warning("[%s] Commute pre-check failed for %s: %s", name, job.get("title"), exc)
+                else:
+                    jid = match_repo.catalog_job_id(job)
+                    match_repo.update_match_commute(
+                        cid,
+                        jid,
+                        work_type=commute["work_type"],
+                        commute_minutes=commute["commute_minutes"],
+                        commute_note=commute["commute_note"],
+                        commute_result=commute["action"],
+                    )
+                    job["work_type"] = commute["work_type"]
+                    job["commute_minutes"] = commute["commute_minutes"]
+                    job["commute_result"] = commute["action"]
+                    if commute["action"] == "skip":
+                        skipped_commute += 1
+                    elif commute["action"] == "needs_review":
+                        reviewed += 1
+                    elif commute["action"] == "auto_apply":
+                        eligible += 1
+            prepared.append(job)
+        run_ranking(prepared, config, candidate_id=cid)
+        ranked = len(prepared)
+        for job in prepared:
+            jid = match_repo.catalog_job_id(job)
+            match = match_repo.get_match(cid, jid) or {}
+            score = match.get("score")
+            if score is None or int(score) >= min_score:
+                continue
+            if match.get("commute_result") == "skip":
+                continue
+            previous = match.get("commute_result")
+            match_repo.update_match_commute(
+                cid,
+                jid,
+                work_type=match.get("work_type") or "unknown",
+                commute_minutes=match.get("commute_minutes"),
+                commute_note="Score below threshold",
+                commute_result="skip",
+            )
+            if previous == "needs_review":
+                reviewed = max(0, reviewed - 1)
+            elif previous == "auto_apply":
+                eligible = max(0, eligible - 1)
+            skipped_commute += 1
     else:
         logger.info("[%s] No unscored matches", name)
 
     needs_commute = match_repo.get_matches_needing_commute(cid)
-    skipped_commute = 0
-    reviewed = 0
-    eligible = 0
     for job in needs_commute:
         jid = match_repo.catalog_job_id(job)
         match = match_repo.get_match(cid, jid)
@@ -120,6 +172,7 @@ def run_candidate_cycle(candidate: dict, base_config: dict) -> dict:
 def run_rank(*, candidate_id: int | None = None) -> dict:
     """Rank unscored matches per searching candidate. Does not crawl or apply."""
     logger.info("Starting ranking-only pass (auto-apply disabled)")
+    begin_llm_cycle()
     init_db()
     base_config = load_settings()
     dry_run = scheduler_dry_run(base_config)
@@ -141,12 +194,14 @@ def run_rank(*, candidate_id: int | None = None) -> dict:
     for candidate in people:
         result = run_candidate_cycle(candidate, base_config)
         totals["ranked"] += result["ranked"]
+    log_llm_cycle_summary()
     logger.info("Ranking complete — %s", totals)
     return totals
 
 
 def run_cycle(*, candidate_id: int | None = None) -> dict:
     logger.info("=" * 60)
+    begin_llm_cycle()
     init_db()
     base_config = load_settings()
     dry_run = scheduler_dry_run(base_config)
@@ -205,6 +260,7 @@ def run_cycle(*, candidate_id: int | None = None) -> dict:
         "candidates": len(people),
         "sources": list(crawl_cfg.get("_source_runs") or []),
     }
+    log_llm_cycle_summary()
     run_repo.log_run(
         source="all",
         found=new_count,

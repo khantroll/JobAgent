@@ -1,0 +1,11 @@
+[Unit]
+Description=JobAgent crawl and rank cycle
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/my_webapp__4
+# Put JOB_AGENT_API_TOKEN in this file or in config/secrets.yaml (api_token).
+# Do not pass the token on ExecStart. Arguments are visible in process listings.
+EnvironmentFile=-/var/www/my_webapp__4/.env
+ExecStart=/var/www/my_webapp__4/.venv/bin/python -m jobagent.cli run-cycle
