@@ -1,4 +1,6 @@
 """The Muse public jobs API — https://www.themuse.com/developers/api/v2"""
+from __future__ import annotations
+
 import logging
 import re
 
